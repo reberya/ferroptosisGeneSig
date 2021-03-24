@@ -1,0 +1,88 @@
+---
+title: "convert_fpkm_to_counts"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load packages and data
+```{r, warning=F, message=FALSE}
+
+#install.packages(c('dplyr', 'tidyverse', 'plyr', 'stringr', 'data.table', 'Rgb))
+#BiocManager::install(c("GenomicRanges"))
+
+library('plyr')
+library('dplyr')
+library('stringr')
+library('data.table')
+library('tidyverse')
+library('magrittr')
+library('Rgb')
+library('GenomicRanges')
+
+# ensembl 67 gtf 
+gtf <- read.gtf('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/ensembl/ensembl_67/gtf/Homo_sapiens.GRCh37.67.gtf')
+
+
+```
+
+# Compress gtf and compute gene lengths per gene
+First we will filter the gtf file for all exons, then compress the exons by gene ID, and finally compute the length of all the compressed exons for each gene. This will be used in the conversion of fpkm to counts.
+```{r}
+
+# filter for exons
+gtf %<>% dplyr::filter(feature == 'exon') %>%
+  # filter for desired chromosomes
+  filter(seqname %in% c(1:22, 'x', 'y')) %>%
+  # select required attributes
+  dplyr::select(c('seqname', 'start', 'end', 'gene_name'))
+
+# convert to granges and compress by gene
+gr <- GRanges(gtf)
+gr <- unlist(reduce(split(gr, gr$gene_name)))
+
+# convert to data frame
+gr <- data.frame(chr = seqnames(gr),
+                   start = start(gr),
+                   end = end(gr),
+                   gene = names(gr))
+
+# Calculate length for each gene
+gr$length = gr$end - gr$start
+lengths <- aggregate(gr$length, by = list(Category = gr$gene), FUN=sum)
+
+```
+
+# Convert FPKM to counts
+According to the elife 2014 paper (DOI: 10.7554/eLife.02523): "From two independent biological replicates, we obtained an average of ∼30.5 million unique mapped reads and 11,867 unique transcripts".
+To convert fpkm to counts we will take their fpkm values for each replicate, multiply them by the length of the gene/1000(kilobase normalization) to get rid of the kilobase metric, and multiply by the scaling factor 15.25 (15.25 million/1million; I'm assuming each replicate was sequenced to 15.25 million reads to be conservative since their statement about sequencing depth is ambiguous)
+```{r}
+
+# load fpkm data from elife paper
+fpkm <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.5061_dryad.jp43c__v1/DataPackage1.txt')
+
+# Multiply fpkm values by the length of the gene to get RPM values
+## merge lengths with fpkm
+fpkm %<>% dplyr::select(GeneID:`Erastin+BME_2`) %>%
+  merge(., lengths, by.x = 'GeneID', by.y = 'Category')
+## multiply fpkm by lengths
+fpkm[,2:9] = fpkm[,2:9]*(fpkm$x)
+
+# Multiply by total reads per sample
+fpkm[,2:9] = fpkm[,2:9]*10.25e6
+
+# divide by scaling factor which accounts for the kilobase per million mapped units
+fpkm[,2:9] = fpkm[,2:9]/(10e9)
+
+# clean file for output
+colnames(fpkm) <- c('gene', 'dmso_1', 'dmso_2', 'bme_1', 'bme_2', 'erastin_1' ,'erastin_2', 'erastin_bme_1', 'erastin_bme_2', 'lengths')
+counts <- fpkm[,-10]
+counts[,2:9] <- lapply(counts[,2:9], as.integer)
+
+# sums to 32e6..... not sure why
+sum(counts$dmso_1)
+
+```
+
