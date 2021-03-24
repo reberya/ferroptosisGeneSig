@@ -1,0 +1,65 @@
+---
+title: "compare_clue_elife_erastin"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load packages and data
+```{r, warning=F, message=FALSE}
+
+library('plyr')
+library('dplyr')
+library('stringr')
+library('data.table')
+library('tidyverse')
+library('magrittr')
+
+# elife erastin fpkm
+fpkm <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.5061_dryad.jp43c__v1/DataPackage1.txt')
+
+# clue erastin
+clue.erastin <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/erastin/clue_v1.3_erastin_1.gct', skip = 2, data.table = F)
+
+
+```
+
+# Clean clue data
+```{r}
+
+# eliminate 24h time point, keeping only 6 hour
+clue.erastin =  clue.erastin[, c(rep(T, 9) ,clue.erastin[6, 10:ncol(clue.erastin)] == '6 h')]
+
+# Shift cell line name to column name and eliminate other metadata
+colnames(clue.erastin)[10:59] <- clue.erastin[1,10:59]
+clue.erastin <- clue.erastin[9:length(clue.erastin$id),]
+
+# convert to numeric and find max value of z score
+clue.erastin[10:ncol(clue.erastin)] <- apply(clue.erastin[10:ncol(clue.erastin)], 2, as.numeric)
+max(clue.erastin[,10:ncol(clue.erastin)])
+
+```
+
+# Calculate 'z score' of erastin fpkm data. 
+As there is only 2 replicates for the elife erastin data sets I am not sure if calculating a zscore is statistically correct. Will discuss with Marcin to see if he has any better ideas.
+```{r}
+
+# calculate mean/sd of dmso controls
+fpkm$mean <- rowMeans(fpkm[,2:3])
+fpkm$sd <- apply(fpkm[,2:3],1,sd)
+
+# calculate z score of erastin replicates relative to control dmso
+fpkm$zscore_1 <- (fpkm$Erastin_1 - fpkm$mean)/fpkm$sd
+fpkm$zscore_2 <- (fpkm$Erastin_2 - fpkm$mean)/fpkm$sd
+fpkm$zscore_avg <- rowMeans(fpkm[,22:23])
+
+# filter out abnormal values
+fpkm %<>% dplyr::filter(!zscore_avg == Inf)
+
+
+
+```
+
+
