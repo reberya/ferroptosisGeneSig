@@ -7,7 +7,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Load packages and data
+# Load packages
 ```{r, warning=F, message=FALSE}
 
 library('plyr')
@@ -17,34 +17,42 @@ library('data.table')
 library('tidyverse')
 library('magrittr')
 
-# elife erastin fpkm
-fpkm <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.5061_dryad.jp43c__v1/DataPackage1.txt')
-
-# clue erastin
-clue.erastin <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/erastin/clue_v1.3_erastin_1.gct', skip = 2, data.table = F)
-
-
 ```
 
 # Clean clue data
 ```{r}
 
+# clue erastin - loaded as 2 seperate files because of export limits of clue.io
+clue.erastin <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/erastin/clue_v1.3_erastin_1.gct', skip = 2, data.table = F)
+temp <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/erastin/clue_v1.3_erastin_2.gct', skip = 2, data.table = F)
+
+# merge clue erastin files
+clue.erastin[,90:97] <- temp[,10:17]
+
+
 # eliminate 24h time point, keeping only 6 hour
 clue.erastin =  clue.erastin[, c(rep(T, 9) ,clue.erastin[6, 10:ncol(clue.erastin)] == '6 h')]
 
 # Shift cell line name to column name and eliminate other metadata
-colnames(clue.erastin)[10:59] <- clue.erastin[1,10:59]
+colnames(clue.erastin)[10:ncol(clue.erastin)] <- clue.erastin[1,10:ncol(clue.erastin)]
 clue.erastin <- clue.erastin[9:length(clue.erastin$id),]
 
 # convert to numeric and find max value of z score
 clue.erastin[10:ncol(clue.erastin)] <- apply(clue.erastin[10:ncol(clue.erastin)], 2, as.numeric)
 max(clue.erastin[,10:ncol(clue.erastin)])
 
+# select cols to keep for correlation
+clue.erastin %<>% dplyr::select(-id, -pr_gene_title, -pr_is_lm, -pr_is_bing, -self_correlation, -frac_self_rank, -p_value, -gene_space)
+
 ```
 
 # Calculate 'z score' of erastin fpkm data. 
 As there is only 2 replicates for the elife erastin data sets I am not sure if calculating a zscore is statistically correct. Will discuss with Marcin to see if he has any better ideas.
 ```{r}
+
+# elife erastin fpkm
+fpkm <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.5061_dryad.jp43c__v1/DataPackage1.txt')
+
 
 # calculate mean/sd of dmso controls
 fpkm$mean <- rowMeans(fpkm[,2:3])
@@ -55,11 +63,59 @@ fpkm$zscore_1 <- (fpkm$Erastin_1 - fpkm$mean)/fpkm$sd
 fpkm$zscore_2 <- (fpkm$Erastin_2 - fpkm$mean)/fpkm$sd
 fpkm$zscore_avg <- rowMeans(fpkm[,22:23])
 
-# filter out abnormal values
-fpkm %<>% dplyr::filter(!zscore_avg == Inf)
+# filter fpkm for base expression and reasonable z score
+## Only expressed genes were chosen to correlate on. Expression defined as mean expression in control of 1
+fpkm %<>% dplyr::filter(mean > 1) %>%
+  ## Zscore threshold of 250 was chosen as this retains the most sig. change reported in the elife paper (CHAC1)
+  dplyr::filter(abs(zscore_avg) < 250)
 
+# Select for columns used in future analysis
+elife <- fpkm %>% dplyr::select(GeneID, zscore_avg)
 
 
 ```
+
+# Look at distribution to determine whether parametric or non parametric correlation test
+Seems to be approximately normal
+```{r}
+
+# all data
+hist(elife$zscore_avg, breaks=200)
+
+# decrease cutoff for better visualization of bulk of distribution (all z scores less than 25)
+temp <- elife %>% dplyr::filter(abs(zscore_avg) < 25)
+hist(temp$zscore_avg, breaks=100)
+
+```
+
+# Correlate Clue Z scores with elife erastin Z scores using parametric pearson correlation test
+Correlate with all genes meeting criteria thus far as well as just the genes mentioned in the elife paper as ferroptosis specific
+```{r}
+
+# Merge the data frames
+forCor <- merge(elife, clue.erastin, by.x = 'GeneID', by.y = 'pr_gene_symbol')
+
+# Calculate correlation
+apply(forCor[, 3:ncol(forCor)], 2, cor, forCor$zscore_avg, method = 'pearson')
+max(apply(forCor[, 3:ncol(forCor)], 2, cor, forCor$zscore_avg, method = 'pearson'))
+
+
+# Look at correlation of top genes reported in elife paper
+topGenes <- c('CHAC1', 'DDIT4', 'LOC284561', 'ASNS', 'TSC22D3', 'DDIT3', 'JDP2', 'SESN2',
+              'SLC1A4', 'PCK2', 'SLC7A11', 'TXNIP', 'VLDLR', 'GPT2', 'PSAT1', 'C9ORF150',
+              'SLC7A5', 'HERPUD1', 'XBP1', 'ATF4', 'ZNF419', 'KLHL24', 'TRIB3', 'ZNF643',
+              'ATP6V1G2', 'VEGFA', 'GDF15', 'TUBE1', 'ARRDC3', 'CEBPG',
+              'SNORA16A', 'RGS4', 'MUTED-TXNDC5', 'LOC390705')
+
+temp <- forCor %>% dplyr::filter(GeneID %in% topGenes)
+apply(temp[, 3:ncol(temp)], 2, cor, temp$zscore_avg, method = 'pearson')
+max(apply(temp[, 3:ncol(temp)], 2, cor, temp$zscore_avg, method = 'pearson'))
+
+
+```
+
+
+
+
 
 
