@@ -114,6 +114,66 @@ max(apply(temp[, 3:ncol(temp)], 2, cor, temp$zscore_avg, method = 'pearson'))
 
 ```
 
+# Correlate erastin elife to other clue.io data
+
+## Function to clean all clue.io data
+Allows to sort clue by compound dose and time point. There is occasionally duplicate cell lines even after sorting by compound/exposure time but these are handled by taking the value with the higher self-correlation score among replicates (distil_cc_q75)
+```{r}
+
+clean_clue <- function(clue, dose = '10 µM', time = '6 h'){
+  
+  # TEST
+  clue <- clue.art
+  
+  # eliminate 24h time point, keeping only 6 hour
+  clue =  clue[, c(rep(T, 9) ,clue[6, 10:ncol(clue)] == time)]
+  
+  # keep dose of interest
+  clue =  clue[, c(rep(T, 9) ,clue[5, 10:ncol(clue)] == dose)]
+  
+  # separate metadata from z scores for duplicate removal
+  temp <- clue[, 10:ncol(clue)] # z scores
+  clue <- clue[,1:9] # meta
+  
+  # For duplicates, keep the replicate with a higher distil_cc_q75
+  # This is the replicate consistency score (spearman correlation between replicates of lvl 4 profile)
+  # https://clue.io/connectopedia/category/Analytical%20Methods
+  ## order z scores by the distil_cc_q75 to facilitate removal of lower distil value
+  temp <- temp[,rev(order(temp[7,]))]
+
+  # recombine z scores with metadata
+  clue[,10:(10+length(temp))] <- temp
+  
+  # Rename columns with cell line
+  colnames(clue)[10:ncol(clue)] <- clue[1,10:ncol(clue)]
+  
+  # remove duplicate columns, keeping the one with the higher distil_cc_q75 score (higher corr between reps)
+  # works because ordered by distil score above
+  clue <- clue[,!duplicated(colnames(clue))]
+  
+  # elimiante unecessary meta data
+  clue <- clue[9:length(clue$id),]
+  
+  # convert to numeric
+  clue[10:ncol(clue)] <- apply(clue[10:ncol(clue)], 2, as.numeric)
+  
+  # select cols to keep for correlation
+  clue %<>% dplyr::select(-id, -pr_gene_title, -pr_is_lm, -pr_is_bing, -self_correlation, -frac_self_rank, -p_value, -gene_space)
+  
+  return(clue)
+}
+
+
+```
+
+## Clean clue datasets for downstream analysis using above function
+```{r}
+
+clue.art <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/artesunate/clue_v1.3_artesunate_1.gct', skip = 2, data.table = F)
+
+clue.art <- clean_clue(clue.art)
+
+```
 
 
 
