@@ -96,7 +96,8 @@ Correlate with all genes meeting criteria thus far as well as just the genes men
 forCor <- merge(elife, clue.erastin, by.x = 'GeneID', by.y = 'pr_gene_symbol')
 
 # Calculate correlation
-apply(forCor[, 3:ncol(forCor)], 2, cor, forCor$zscore_avg, method = 'pearson')
+clue_erastin <- apply(forCor[, 3:ncol(forCor)], 2, cor, forCor$zscore_avg, method = 'pearson')
+clue_erastin
 max(apply(forCor[, 3:ncol(forCor)], 2, cor, forCor$zscore_avg, method = 'pearson'))
 
 
@@ -120,62 +121,221 @@ max(apply(temp[, 3:ncol(temp)], 2, cor, temp$zscore_avg, method = 'pearson'))
 Allows to sort clue by compound dose and time point. There is occasionally duplicate cell lines even after sorting by compound/exposure time but these are handled by taking the value with the higher self-correlation score among replicates (distil_cc_q75)
 ```{r}
 
-clean_clue <- function(clue, dose = '10 µM', time = '6 h'){
+clean_clue <- function(clue, dose = '10 µM', time = '6 h', see_avail_opts = T){
   
-  # TEST
-  clue <- clue.art
+  if (see_avail_opts == T) {
+    # print available cell lines and doses
+    temp <- as.data.frame(t(unname(clue[c(1,5),10:ncol(clue)])))
+    colnames(temp) <- c('line', 'dose')
+    print(table(temp$line, temp$dose))
+    
+        # print available time points and doses
+    temp <- as.data.frame(t(unname(clue[5:6,10:ncol(clue)])))
+    colnames(temp) <- c('dose', 'time')
+    print(table(temp$dose, temp$time))
+  }
   
-  # eliminate 24h time point, keeping only 6 hour
-  clue =  clue[, c(rep(T, 9) ,clue[6, 10:ncol(clue)] == time)]
-  
-  # keep dose of interest
-  clue =  clue[, c(rep(T, 9) ,clue[5, 10:ncol(clue)] == dose)]
-  
-  # separate metadata from z scores for duplicate removal
-  temp <- clue[, 10:ncol(clue)] # z scores
-  clue <- clue[,1:9] # meta
-  
-  # For duplicates, keep the replicate with a higher distil_cc_q75
-  # This is the replicate consistency score (spearman correlation between replicates of lvl 4 profile)
-  # https://clue.io/connectopedia/category/Analytical%20Methods
-  ## order z scores by the distil_cc_q75 to facilitate removal of lower distil value
-  temp <- temp[,rev(order(temp[7,]))]
-
-  # recombine z scores with metadata
-  clue[,10:(10+length(temp))] <- temp
-  
-  # Rename columns with cell line
-  colnames(clue)[10:ncol(clue)] <- clue[1,10:ncol(clue)]
-  
-  # remove duplicate columns, keeping the one with the higher distil_cc_q75 score (higher corr between reps)
-  # works because ordered by distil score above
-  clue <- clue[,!duplicated(colnames(clue))]
-  
-  # elimiante unecessary meta data
-  clue <- clue[9:length(clue$id),]
-  
-  # convert to numeric
-  clue[10:ncol(clue)] <- apply(clue[10:ncol(clue)], 2, as.numeric)
-  
-  # select cols to keep for correlation
-  clue %<>% dplyr::select(-id, -pr_gene_title, -pr_is_lm, -pr_is_bing, -self_correlation, -frac_self_rank, -p_value, -gene_space)
-  
-  return(clue)
+  else {
+    # keep time point of interest
+    if(!is.null(time)){
+      clue =  clue[, c(rep(T, 9) ,clue[6, 10:ncol(clue)] == time)]
+    }
+    
+    # keep dose of interest
+    if(!is.null(dose)){
+    clue =  clue[, c(rep(T, 9) ,clue[5, 10:ncol(clue)] == dose)]
+    }
+    
+    # separate metadata from z scores for duplicate removal
+    temp <- clue[, 10:ncol(clue)] # z scores
+    clue <- clue[,1:9] # meta
+    
+    # For duplicates, keep the replicate with a higher distil_cc_q75
+    # This is the replicate consistency score (spearman correlation between replicates of lvl 4 profile)
+    # https://clue.io/connectopedia/category/Analytical%20Methods
+    ## order z scores by the distil_cc_q75 to facilitate removal of lower distil value
+    temp <- temp[,rev(order(temp[7,]))]
+    
+    # recombine z scores with metadata
+    clue[,10:(10+length(temp))] <- temp
+    
+    # Rename columns with cell line
+    colnames(clue)[10:ncol(clue)] <- clue[1,10:ncol(clue)]
+    
+    # remove duplicate columns, keeping the one with the higher distil_cc_q75 score (higher corr between reps)
+    # works because ordered by distil score above
+    clue <- clue[,!duplicated(colnames(clue))]
+    
+    # elimiante unecessary meta data
+    clue <- clue[9:length(clue$id),]
+    
+    # convert to numeric
+    clue[10:ncol(clue)] <- apply(clue[10:ncol(clue)], 2, as.numeric)
+    
+    # select cols to keep for correlation
+    clue %<>% dplyr::select(-id, -pr_gene_title, -pr_is_lm, -pr_is_bing, -self_correlation, -frac_self_rank, -p_value, -gene_space)
+    
+    return(clue)
+  }
 }
-
 
 ```
 
 ## Clean clue datasets for downstream analysis using above function
 ```{r}
 
-clue.art <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/artesunate/clue_v1.3_artesunate_1.gct', skip = 2, data.table = F)
+# Artesunate
+clue <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/artesunate/clue_v1.3_artesunate_1.gct', skip = 2, data.table = F)
+clean_clue(clue, see_avail_opts = T)
+clue_art_6h_10u <- clean_clue(clue, time = '6 h', dose = '10 µM', see_avail_opts = F)
 
-clue.art <- clean_clue(clue.art)
+# GPX4 
+clue <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/gpx4/clue_v1.3_gpx4_1.gct', skip = 2, data.table = F)
+clean_clue(clue, see_avail_opts = T)
+clue_gpx4 <- clean_clue(clue, time = NULL, dose = NULL, see_avail_opts = F)
+
+# Sorafenib 
+clue <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/sorafenib/clue_v1.3_sorafenib_1.gct', skip = 2, data.table = F)
+clean_clue(clue, see_avail_opts = T)
+clue_soraf_6h_10u <- clean_clue(clue, time = '6 h', dose = '10 µM', see_avail_opts = F)
+clue_soraf_6h_1u <- clean_clue(clue, time = '6 h', dose = '1 µM', see_avail_opts = F)
+
+# Sulfasalazine 
+clue <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/sulfasalazine/clue_v1.3_sulfasalazine_1.gct', skip = 2, data.table = F)
+clean_clue(clue, see_avail_opts = T)
+clue_sulfa <- clean_clue(clue, time = '6 h', dose = NULL, see_avail_opts = F)
+
+
+
+```
+
+## Calculate correlation for all clue datasets with erastin elife 
+```{r}
+
+# create data frame to append to
+cor <- as.data.frame(clue_erastin)
+cor$cellLine <- rownames(cor)
+cor %<>% dplyr::select(cellLine, clue_erastin)
+
+# all data sets to add
+sets <- list(clue_art_6h_10u = clue_art_6h_10u, 
+#             clue_soraf_6h_10u = clue_soraf_6h_10u, 
+             clue_gpx4 =clue_gpx4, 
+#             clue_soraf_6h_1u =clue_soraf_6h_1u,
+              clue_sulfa = clue_sulfa)
+
+w <- 1
+for(z in sets){
+  
+  # Merge the data frames
+  forCor <- merge(elife, z, by.x = 'GeneID', by.y = 'pr_gene_symbol')
+  
+  # Calculate correlation
+  curr <- as.data.frame(apply(forCor[, 3:ncol(forCor)], 2, cor, forCor$zscore_avg, method = 'pearson'))
+  colnames(curr) <- names(sets)[w]
+  
+  # merge master data frame with current
+  cor <- merge(cor, curr, all = T, by.x = 'cellLine', by.y=0)
+  
+  # place holder
+  w <- w+1
+}
+
+# Clean for plotting in heatmap
+toPlot <- cor %>% set_rownames(cor$cellLine) %>%
+  dplyr::select(-cellLine)
+
+
+
+```
+
+## Plot correlations in heatmap for all genes
+```{r}
+
+library(ComplexHeatmap)
+
+Heatmap(toPlot, na_col = 'black', 
+        cluster_rows = T, 
+        cluster_columns = T,
+        width = unit(2, "cm"),
+        height = unit(6, "cm"),
+        show_row_dend = F,
+        row_names_gp = gpar(fontsize = 8),
+        show_row_names = F,
+        row_title = 'Cell lines',
+        column_title = 'Corr b/t elife & other compounds - all genes')
 
 ```
 
 
 
+```{r}
 
+# Look at correlation of top genes reported in elife paper
+topGenes <- c('CHAC1', 'DDIT4', 'LOC284561', 'ASNS', 'TSC22D3', 'DDIT3', 'JDP2', 'SESN2',
+              'SLC1A4', 'PCK2', 'SLC7A11', 'TXNIP', 'VLDLR', 'GPT2', 'PSAT1', 'C9ORF150',
+              'SLC7A5', 'HERPUD1', 'XBP1', 'ATF4', 'ZNF419', 'KLHL24', 'TRIB3', 'ZNF643',
+              'ATP6V1G2', 'VEGFA', 'GDF15', 'TUBE1', 'ARRDC3', 'CEBPG',
+              'SNORA16A', 'RGS4', 'MUTED-TXNDC5', 'LOC390705')
+
+# Merge the elife data with the clue erastin data as above
+forCor <- merge(elife, clue.erastin, by.x = 'GeneID', by.y = 'pr_gene_symbol')
+
+# correlate based on the top genes only
+temp <- forCor %>% dplyr::filter(GeneID %in% topGenes)
+clue_erastin <- apply(temp[, 3:ncol(temp)], 2, cor, temp$zscore_avg, method = 'pearson')
+
+# create data frame to append to
+cor <- as.data.frame(clue_erastin)
+cor$cellLine <- rownames(cor)
+cor %<>% dplyr::select(cellLine, clue_erastin)
+
+# all data sets to add
+sets <- list(clue_art_6h_10u = clue_art_6h_10u, 
+             clue_gpx4 =clue_gpx4, 
+              clue_sulfa = clue_sulfa)
+
+w <- 1
+for(z in sets){
+  
+  # Merge the data frames
+  forCor <- merge(elife, z, by.x = 'GeneID', by.y = 'pr_gene_symbol')
+  
+  # select top genes
+  forCor %<>% dplyr::filter(GeneID %in% topGenes)
+  
+  # Calculate correlation
+  curr <- as.data.frame(apply(forCor[, 3:ncol(forCor)], 2, cor, forCor$zscore_avg, method = 'pearson'))
+  colnames(curr) <- names(sets)[w]
+  
+  # merge master data frame with current
+  cor <- merge(cor, curr, all = T, by.x = 'cellLine', by.y=0)
+  
+  # place holder
+  w <- w+1
+}
+
+# Clean for plotting in heatmap
+toPlot <- cor %>% set_rownames(cor$cellLine) %>%
+  dplyr::select(-cellLine)
+
+
+```
+
+## Heatmap for reported erastin genes
+```{r}
+
+Heatmap(toPlot, na_col = 'black', 
+        cluster_rows = T, 
+        cluster_columns = T,
+        width = unit(2, "cm"),
+        height = unit(6, "cm"),
+        show_row_dend = F,
+        row_names_gp = gpar(fontsize = 8),
+        show_row_names = F,
+        row_title = 'Cell lines',
+        column_title = 'Corr b/t elife & other compounds - elife genes')
+
+
+```
 
