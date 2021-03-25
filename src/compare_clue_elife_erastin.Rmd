@@ -7,6 +7,10 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Description:
+The intent of this script is to compare the similarity between the elife erastin RNA-seq data and the clue.io datasets for ferroptosis inducing compounds (including erastin).
+
+
 # Load packages
 ```{r, warning=F, message=FALSE}
 
@@ -19,7 +23,8 @@ library('magrittr')
 
 ```
 
-# Clean clue data
+# Clean clue data for erastin
+Simplifies the erastin clue data (zscores) based on timepoint to allow for merging with the elife data and corelation based analysis.
 ```{r}
 
 # clue erastin - loaded as 2 seperate files because of export limits of clue.io
@@ -50,9 +55,8 @@ clue.erastin %<>% dplyr::select(-id, -pr_gene_title, -pr_is_lm, -pr_is_bing, -se
 As there is only 2 replicates for the elife erastin data sets I am not sure if calculating a zscore is statistically correct. Will discuss with Marcin to see if he has any better ideas.
 ```{r}
 
-# elife erastin fpkm
+# elife erastin fpkm read in
 fpkm <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.5061_dryad.jp43c__v1/DataPackage1.txt')
-
 
 # calculate mean/sd of dmso controls
 fpkm$mean <- rowMeans(fpkm[,2:3])
@@ -75,7 +79,7 @@ elife <- fpkm %>% dplyr::select(GeneID, zscore_avg)
 
 ```
 
-# Look at distribution to determine whether parametric or non parametric correlation test
+# Look at distribution of erastin z scores to determine whether parametric or non parametric correlation test
 Seems to be approximately normal
 ```{r}
 
@@ -101,19 +105,25 @@ clue_erastin
 max(apply(forCor[, 3:ncol(forCor)], 2, cor, forCor$zscore_avg, method = 'pearson'))
 
 
-# Look at correlation of top genes reported in elife paper
+```
+
+# Look specifically at correlation scores for reported genes from Elife 2014 paper.
+```{r}
+
+# Top genes from Elife 2014 ferroptosis paper 
 topGenes <- c('CHAC1', 'DDIT4', 'LOC284561', 'ASNS', 'TSC22D3', 'DDIT3', 'JDP2', 'SESN2',
               'SLC1A4', 'PCK2', 'SLC7A11', 'TXNIP', 'VLDLR', 'GPT2', 'PSAT1', 'C9ORF150',
               'SLC7A5', 'HERPUD1', 'XBP1', 'ATF4', 'ZNF419', 'KLHL24', 'TRIB3', 'ZNF643',
               'ATP6V1G2', 'VEGFA', 'GDF15', 'TUBE1', 'ARRDC3', 'CEBPG',
               'SNORA16A', 'RGS4', 'MUTED-TXNDC5', 'LOC390705')
 
+# Look at correlation of top genes reported in elife paper
 temp <- forCor %>% dplyr::filter(GeneID %in% topGenes)
 apply(temp[, 3:ncol(temp)], 2, cor, temp$zscore_avg, method = 'pearson')
 max(apply(temp[, 3:ncol(temp)], 2, cor, temp$zscore_avg, method = 'pearson'))
 
-
 ```
+
 
 # Correlate erastin elife to other clue.io data
 
@@ -123,6 +133,7 @@ Allows to sort clue by compound dose and time point. There is occasionally dupli
 
 clean_clue <- function(clue, dose = '10 µM', time = '6 h', see_avail_opts = T){
   
+  # If fxn allows for viewing avail options for timepoints/concentrations
   if (see_avail_opts == T) {
     # print available cell lines and doses
     temp <- as.data.frame(t(unname(clue[c(1,5),10:ncol(clue)])))
@@ -205,11 +216,9 @@ clue <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/
 clean_clue(clue, see_avail_opts = T)
 clue_sulfa <- clean_clue(clue, time = '6 h', dose = NULL, see_avail_opts = F)
 
-
-
 ```
 
-## Calculate correlation for all clue datasets with erastin elife 
+## Calculate correlation for all clue datasets with erastin elife for all genes
 ```{r}
 
 # create data frame to append to
@@ -224,7 +233,7 @@ sets <- list(clue_art_6h_10u = clue_art_6h_10u,
 #             clue_soraf_6h_1u =clue_soraf_6h_1u,
               clue_sulfa = clue_sulfa)
 
-w <- 1
+w <- 1 # placeholder 
 for(z in sets){
   
   # Merge the data frames
@@ -237,7 +246,7 @@ for(z in sets){
   # merge master data frame with current
   cor <- merge(cor, curr, all = T, by.x = 'cellLine', by.y=0)
   
-  # place holder
+  # place holder increase
   w <- w+1
 }
 
@@ -254,6 +263,7 @@ toPlot <- cor %>% set_rownames(cor$cellLine) %>%
 
 library(ComplexHeatmap)
 
+# plot
 Heatmap(toPlot, na_col = 'black', 
         cluster_rows = T, 
         cluster_columns = T,
@@ -268,7 +278,7 @@ Heatmap(toPlot, na_col = 'black',
 ```
 
 
-
+## Calculate correlation for all clue datasets with erastin elife for top reported genes in elife 2014 
 ```{r}
 
 # Look at correlation of top genes reported in elife paper
@@ -322,9 +332,10 @@ toPlot <- cor %>% set_rownames(cor$cellLine) %>%
 
 ```
 
-## Heatmap for reported erastin genes
+## Plot correlation for all clue datasets with erastin elife for top reported genes in elife 2014 
 ```{r}
 
+# plot
 Heatmap(toPlot, na_col = 'black', 
         cluster_rows = T, 
         cluster_columns = T,
