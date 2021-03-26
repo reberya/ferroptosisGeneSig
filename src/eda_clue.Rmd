@@ -1,0 +1,61 @@
+---
+title: "eda_clue"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Description:
+
+
+# Load packages
+```{r, warning=F, message=FALSE}
+
+library('plyr')
+library('dplyr')
+library('stringr')
+library('data.table')
+library('tidyverse')
+library('magrittr')
+
+```
+
+# Clean clue data for erastin
+Simplifies the erastin clue data (zscores) based on timepoint to allow for merging with the elife data and corelation based analysis.
+```{r}
+
+# clue erastin - loaded as 2 seperate files because of export limits of clue.io
+clue.erastin <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/erastin/clue_v1.3_erastin_1.gct', skip = 2, data.table = F)
+temp <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/erastin/clue_v1.3_erastin_2.gct', skip = 2, data.table = F)
+
+# merge clue erastin files
+clue.erastin[,90:97] <- temp[,10:17]
+
+
+# eliminate 24h time point, keeping only 6 hour
+clue.erastin =  clue.erastin[, c(rep(T, 9) ,clue.erastin[6, 10:ncol(clue.erastin)] == '6 h')]
+
+# Shift cell line name to column name and eliminate other metadata
+colnames(clue.erastin)[10:ncol(clue.erastin)] <- clue.erastin[1,10:ncol(clue.erastin)]
+clue.erastin <- clue.erastin[9:length(clue.erastin$id),]
+
+# convert to numeric
+clue.erastin[10:ncol(clue.erastin)] <- apply(clue.erastin[10:ncol(clue.erastin)], 2, as.numeric)
+
+# select cols to keep for correlation
+clue.erastin %<>% dplyr::select(-id, -pr_gene_title, -pr_is_lm, -pr_is_bing, -self_correlation, -frac_self_rank, -p_value, -gene_space)
+
+```
+
+# 
+1) From elife calculate fold change using deseq
+2) Compare expression of 
+
+```{r}
+
+```
+
+
+
