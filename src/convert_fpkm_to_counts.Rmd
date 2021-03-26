@@ -84,6 +84,10 @@ counts[,2:9] <- lapply(counts[,2:9], as.integer)
 # sums to 32e6..... not sure why
 sum(counts$dmso_1)
 
+# Remove duplicate genes based on expression in control
+counts %<>% dplyr::arrange(-dmso_1)
+counts = counts[!duplicated(counts$gene),]
+
 # write to file
 write.table(counts,'/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elife2014_erastin/rna_seq/elife_counts_from_fpkm.txt',
             row.names = F, col.names = T, quote = F, sep = '\t')
