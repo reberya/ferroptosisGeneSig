@@ -1,0 +1,231 @@
+---
+title: "elife_erastin_deseq"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Description:
+Determines the best method to find the differentially expressed genes from the 2014 elife paper on erastin (DOI: 10.7554/eLife.02523). A method similar to the paper where genes with a fold change > 2 were used as signficant was chosen as the distribution of the pvalues was significantly skewed towards 1. Two models were tested and compared; 1 with all samples (DMSO, erastin, BME, BME+erastin) and one with erastin/DMSO only. As the erastin/DMSO model had lower SE of the logfc values for the genes with the highest logfc, this model was used. Ultimately 86 genes were found to meet criteria of a logfc >2 between erastin and control samples. 
+
+# Load packages
+```{r, warning=F, message=FALSE}
+
+library('plyr')
+library('dplyr')
+library('stringr')
+library('data.table')
+library('tidyverse')
+library('magrittr')
+
+library(DESeq2)
+
+```
+
+# All samples in DESeq2 model
+
+### Load counts and run DESeq model using all samples
+```{r}
+
+# counts file generated from elife 2014's fpkm values
+counts <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elife2014_erastin/rna_seq/elife_counts_from_fpkm.txt', data.table = F)
+
+# modify counts for deseq input
+## sum of expression for controls/erastin used for filtering 
+counts$sums <- rowSums(counts[, c('dmso_1', 'dmso_2', 'erastin_1', 'erastin_2')])
+## expression >4 across 4 samples
+counts %<>% dplyr::filter(sums >= 10)
+## rownames
+counts %<>% set_rownames(counts$gene) %>% select(-gene, -sums)
+
+# create coldata
+condition <- factor(c('cntrl','cntrl','bme','bme','erastin','erastin','erastin_bme','erastin_bme'), 
+                    levels = c('cntrl', 'bme', 'erastin', 'erastin_bme'))
+coldata <- as.data.frame(condition)
+rownames(coldata) <- c('dmso_1','dmso_2','bme_1','bme_2','erastin_1','erastin_2','erastin_bme_1','erastin_bme_2')
+coldata
+
+dds <- DESeqDataSetFromMatrix(countData = counts,
+                              colData = coldata,
+                              design= ~ condition)
+
+dds <- DESeq(dds)
+
+
+```
+
+
+### Differential expression analysis of erastin vs control but in the context of all samples
+Note that looking at the distribution of p values for the erastin data, we can see that it is skewed towards 1. From my brief searches this seems to be a function of the high variance in the erastin sample which has higher expression on average. This should lead us to using a less conservative padj as our statistical method is over conservative. 
+```{r}
+
+# get DE
+res <- results(dds, contrast=c("condition","erastin","cntrl"))
+summary(res)
+
+# Look at distribution of results
+hist(res$pvalue)
+
+# convert to data frame and save for comparison
+res <- as.data.frame(res@listData, row.names = res@rownames)
+hold_model_all <- res
+
+```
+
+
+### Performance of using all samples in model to compare erastin vs control
+```{r}
+
+# hits reported in erastin elife paper
+topGenes <- c('CHAC1', 'DDIT4', 'LOC284561', 'ASNS', 'TSC22D3', 'DDIT3', 'JDP2', 'SESN2',
+              'SLC1A4', 'PCK2', 'SLC7A11', 'TXNIP', 'VLDLR', 'GPT2', 'PSAT1', 'C9ORF150',
+              'SLC7A5', 'HERPUD1', 'XBP1', 'ATF3', 'SLC3A2', 'CBS', 'ATF4', 'ZNF419', 
+              'KLHL24', 'TRIB3', 'ZNF643', 'ATP6V1G2', 'VEGFA', 'GDF15', 'TUBE1', 
+              'ARRDC3', 'CEBPG', 'SNORA16A', 'RGS4', 'MUTED-TXNDC5', 'LOC390705')
+
+# get my top hits using 10% FDR
+sig <- res %>% filter(padj < 0.1) %>%
+  rownames() %>% unlist()
+sig
+
+# Distribution of my significant genes reported as elife ferroptosis signature:
+table(sig %in% topGenes)
+
+# The genes reported in Elife that aren't coming up in my analysis:
+topGenes[!topGenes %in% sig]
+
+
+
+```
+
+
+
+
+
+
+# Use only control and erastin samples in DESeq2 model
+
+### Load counts and run DESeq model
+```{r}
+
+# counts file generated from elife 2014's fpkm values
+counts <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elife2014_erastin/rna_seq/elife_counts_from_fpkm.txt', data.table = F)
+
+# modify counts for deseq input
+## sum of expression for controls/erastin used for filtering 
+counts$sums <- rowSums(counts[, c('dmso_1', 'dmso_2', 'erastin_1', 'erastin_2')])
+## expression >4 across 4 samples
+counts %<>% dplyr::filter(sums >= 10)
+## rownames
+counts %<>% set_rownames(counts$gene) %>% select(-gene, -sums)
+
+# eliminate other samples
+counts %<>% dplyr::select(-bme_1, -bme_2, -erastin_bme_1, -erastin_bme_2)
+
+# create coldata
+condition <- factor(c('cntrl','cntrl','erastin','erastin'), 
+                    levels = c('cntrl', 'erastin'))
+coldata <- as.data.frame(condition)
+rownames(coldata) <- c('dmso_1','dmso_2','erastin_1','erastin_2')
+coldata
+
+dds <- DESeqDataSetFromMatrix(countData = counts,
+                              colData = coldata,
+                              design= ~ condition)
+
+dds <- DESeq(dds)
+
+
+```
+
+
+### Differential expression analysis of erastin vs control using only erastin/control samples
+```{r}
+
+# get DE
+res <- results(dds, contrast=c("condition","erastin","cntrl"))
+summary(res)
+
+# distribution of p values
+hist(res$pvalue)
+
+# convert to data frame and save for comparison
+res <- as.data.frame(res@listData, row.names = res@rownames)
+hold_model_cntEras <- res
+
+```
+
+### Performance of using only erastin/control samples in model to compare erastin vs control
+It appears that they both capture 15 genes reported to be associated with ferroptosis, however the 
+```{r}
+
+# get my top hits using 10% FDR
+sig <- res %>% filter(padj < 0.1) %>%
+  rownames() %>% unlist()
+sig
+
+# Distribution of my significant genes reported as elife ferroptosis signature:
+table(sig %in% topGenes)
+
+# The genes reported in Elife that aren't coming up in my analysis:
+topGenes[!topGenes %in% sig]
+```
+
+
+# Stratification by Log fold change
+
+### Determine which comparison yields the most optimal LogFCs
+So far we've used all samples available to build the model as well as just the control and erastin samples. Here I compare the logFCs and the SE of the LogFCs between both groups. As the model using only the erastin/control samples has lower SE of the logFC for the top 34 genes I will use this model. 
+```{r}
+
+# compare all samples vs just erastin/control looking at logfc/sd
+hold_model_all$gene <- rownames(hold_model_all)
+hold_model_all %<>% dplyr::filter(padj < .9) %>% arrange(gene)
+hold_model_cntEras$gene <- rownames(hold_model_cntEras)
+hold_model_cntEras %<>% dplyr::filter(gene %in% hold_model_all$gene) %>% arrange(gene)
+
+# compare the logfc_SE for both comparisons made thus far. 
+## hold is from the first model above using all samples
+table(hold_model_all$lfcSE > hold_model_cntEras$lfcSE)
+
+
+```
+
+### Take genes with logFC > 2
+```{r}
+
+# look at dist of logfc
+hist(res$log2FoldChange, breaks = 100)
+
+# zoom in 
+temp <- res %>% dplyr::filter(abs(log2FoldChange) <.5)
+hist(temp$log2FoldChange, breaks = 100)
+
+table(abs(res$log2FoldChange) >= 1)
+
+
+
+# get genes with fc > 2 (log2fc > 1)
+sig <- res %>% filter(abs(log2FoldChange) >= 1) %>%
+  rownames() %>% unlist()
+
+# Distribution of my significant genes reported as elife ferroptosis signature:
+table(sig %in% topGenes)
+
+# The genes reported in Elife that aren't coming up in my analysis:
+topGenes[!topGenes %in% sig]
+
+
+# save table of genes considered differentially expressed based on Logfc for downstream analysis
+temp <- res %>% dplyr::filter(abs(log2FoldChange) >=1)
+write.table(temp, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elife2014_erastin/rna_seq/sig_genes_log2fc.txt', quote = F, sep = '\t', row.names = T, col.names = T)
+
+
+```
+
+
+
+
+
