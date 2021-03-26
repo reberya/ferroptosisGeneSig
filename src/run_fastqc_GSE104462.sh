@@ -29,7 +29,8 @@ fastqc -o /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE104462/f
 
 # Summarize with multiqc
 
-multiqc /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE104462/fastqc
+multiqc -o /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE104462/fastqc \
+/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE104462/fastqc
 
 
 
