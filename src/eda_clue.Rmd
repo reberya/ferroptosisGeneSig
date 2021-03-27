@@ -8,7 +8,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Description:
-
+Uses the elife erastin differentially expressed genes based on lfc to explore the clue cell lines treated with erastin. First finds which cell lines show a response to erastin. Then uses these cell lines to find all the genes that change in a uniform way in response to erastin. Then applies these genes to look across all cell lines. Also investigates KRAS mutational status w/in the cell lines as KRAS mutations are consistent with reduced ferroptosis (https://faseb.onlinelibrary.wiley.com/doi/abs/10.1096/fasebj.2020.34.s1.09236)
 
 # Load packages
 ```{r, warning=F, message=FALSE}
@@ -20,10 +20,12 @@ library('data.table')
 library('tidyverse')
 library('magrittr')
 
+library('ComplexHeatmap')
+
 ```
 
 # Clean clue data for erastin
-Simplifies the erastin clue data (zscores) based on timepoint to allow for merging with the elife data and corelation based analysis.
+Simplifies the erastin clue data (zscores) based on timepoint to allow for downstream analysis. 
 ```{r}
 
 # clue erastin - loaded as 2 seperate files because of export limits of clue.io
@@ -49,13 +51,293 @@ clue.erastin %<>% dplyr::select(-id, -pr_gene_title, -pr_is_lm, -pr_is_bing, -se
 
 ```
 
-# 
-1) From elife calculate fold change using deseq
-2) Compare expression of 
-
+# Plot expression of genes found across DESeq analysis to find erastin responsive cell lines
+Filters the clue data for the genes shown to be differentially expressed (based on fold change > 2) in the erastin dataset. Roughly 40% are present in the clue data set. 
 ```{r}
 
+# load degs from elife_erastin_deseq analysis
+degs <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elife2014_erastin/rna_seq/sig_genes_log2fc.txt', data.table = F)
+
+# filter clue data for the degs
+clue.e.filt <- clue.erastin %>% dplyr::filter(pr_gene_symbol %in% degs$V1)
+clue.e.filt %<>% 
+  set_rownames(clue.e.filt$pr_gene_symbol) %>% 
+  select(-pr_gene_symbol)
+
+# only 34/86 genes present - show genes not in clue dataset:
+#degs$V1[!degs$V1 %in% clue.erastin$pr_gene_symbol]
+
+# prep degs for plotting:
+degs.plot <- degs %>% dplyr::select(V1, log2FoldChange) %>% dplyr::filter(V1 %in% rownames(clue.e.filt))
+degs.plot %<>% 
+  set_rownames(degs.plot$V1) %>% 
+  select(-V1) %>% 
+  arrange(-log2FoldChange) %>%
+  as.matrix()
+
+# prep clue data for plotting
+clue.e.filt <- clue.e.filt[order(match(rownames(clue.e.filt),rownames(degs.plot))),]
+clue.e.filt %<>% as.matrix()
+
 ```
+
+# Plot heatmap 
+4 seems to be the optimal number of clusters. Will follow up looking only at upregulated genes. 
+```{r}
+
+H1 <- Heatmap(degs.plot, 
+        show_row_dend = F,
+        width = unit(1, "cm"), 
+        height = unit(6, "cm"),
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        show_column_names = F,
+        column_title = 'Elife') 
+H1
+
+# 2 CLUSTERS
+set.seed(11)
+H1+ Heatmap(clue.e.filt,
+        show_column_dend = T,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        row_order = c(1:34),
+        column_names_gp = gpar(fontsize = 7),
+        column_km = 2,
+        column_km_repeats = 100,
+        column_title = 'Clue-Erastin - 2 km clusters')
+
+# Looking at the clue data only to allow for clustering
+set.seed(11)
+Heatmap(clue.e.filt,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_km = 2,
+        column_km_repeats = 100,
+        row_km_repeats = 100,
+        column_title = 'Clue-Erastin - 2 km clusters w/ row clustering')
+
+# 3 CLUSTERS
+set.seed(11)
+H1+ Heatmap(clue.e.filt,
+        show_column_dend = T,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        row_order = c(1:34),
+        column_names_gp = gpar(fontsize = 7),
+        column_km = 3,
+        column_km_repeats = 100,
+        column_title = 'Clue-Erastin - 3 km clusters')
+
+# Looking at the clue data only to allow for clustering
+set.seed(11)
+Heatmap(clue.e.filt,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_km = 3,
+        column_km_repeats = 100,
+        row_km_repeats = 100,
+        column_title = 'Clue-Erastin - 3 km clusters w/ row clustering')
+
+# 4 CLUSTERS
+set.seed(11)
+H1+ Heatmap(clue.e.filt,
+        show_column_dend = T,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        row_order = c(1:34),
+        column_names_gp = gpar(fontsize = 7),
+        column_km = 4,
+        column_km_repeats = 100,
+        column_title = 'Clue-Erastin - 4 km clusters')
+
+# Looking at the clue data only to allow for clustering
+set.seed(11)
+Heatmap(clue.e.filt,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_km = 4,
+        column_km_repeats = 100,
+        row_km_repeats = 100,
+        column_title = 'Clue-Erastin - 4 km clusters w/ row clustering')
+
+
+```
+
+# Look just at the upregulated genes
+This finds the same elements of the cluster on the right as above
+```{r}
+
+# get upregulated genes only
+upreg <- as.data.frame(degs.plot)
+upreg %<>% dplyr::filter(log2FoldChange >0)
+clue.e.up <- clue.e.filt[rownames(clue.e.filt) %in% rownames(upreg),]
+
+
+set.seed(11)
+Heatmap(clue.e.up,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_km = 4,
+        column_title = 'Clue-Erastin - Upregulated genes only - 4 km clusters')
+
+```
+
+# Extract cell lines from rightmost cluster
+This cluster seems to upregulate most of the genes shown to be upregulated by the elife differential expression analysis. Cell lines are printed below. 
+```{r}
+
+set.seed(11)
+H1 <- draw(Heatmap(clue.e.filt,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_km = 4,
+        column_title = 'Clue-Erastin - Upregulated genes only - 4 km clusters'))
+
+# cell lines
+lines <- colnames(clue.e.filt[,column_order(H1)[[4]]])
+lines
+
+```
+
+# View expression of genes in these cell lines
+Find the genes with rowSums of z scores >6 who show at least 7/8 cell lines changing in the same direction. However, there is poor concordance between these genes and the ones pulled from the erastin elife data set. Only 8. 
+```{r}
+
+# prep cell lines of interest for plotting
+## rownames
+lines.erastin <- clue.erastin %>% 
+  set_rownames(clue.erastin$pr_gene_symbol) %>%
+  dplyr::select(lines) 
+## cumulative z score over 5
+lines.erastin %<>% mutate(sums=rowSums(abs(lines.erastin)))
+lines.erastin %<>% dplyr::filter(sums >6) %>%
+  dplyr::select(-sums)
+##7+ cell lines in same direction
+lines.erastin %<>% 
+  dplyr::mutate(sums = (WSUDLCL2 > 0) + 
+                  (NCIH508 > 0) +
+                  (EFO27 > 0) +
+                  (VCAP > 0) +
+                  (U937 > 0) +
+                  (JHUEM2 > 0) +
+                  (OV7 > 0) +
+                  (HEPG2 > 0))
+lines.erastin %<>% dplyr::filter(sums >= 7 | sums <= 1) %>%
+  dplyr::select(-sums)
+
+
+set.seed(11)
+Heatmap(lines.erastin,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        width = unit(7, "cm"), 
+        height = unit(10, "cm"),
+        column_names_gp = gpar(fontsize = 7),
+        row_km = 2,
+        column_title = 'Clue-Erastin - 8 responsive cell lines')
+
+
+# The number of differntially expressed present in the initial DEGs set from elife
+table(degs$V1 %in% rownames(lines.erastin))
+# What are these genes?
+degs$V1[degs$V1 %in% rownames(lines.erastin)]
+
+
+```
+
+
+# Lets see how these genes look across all the cell lines
+Plots 140 genes across all cell lines
+```{r}
+
+# select 140 genes in all cell ines
+clue.erastin.140 <- clue.erastin %>% dplyr::filter(pr_gene_symbol %in% rownames(lines.erastin)) %>% select(-pr_gene_symbol, -lines)
+
+set.seed(11)
+Heatmap(lines.erastin,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        row_km = 2,
+        column_title = 'Clue-Erastin - 8 responsive cell lines') + 
+
+Heatmap(clue.erastin.140,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        row_km = 2,
+        column_title = 'Clue-Erastin - 140 genes over all cell lines')
+
+
+```
+
+# KRAS status of cell lines
+KRAS directly binds GPX4 to inhibit ferroptosis. Stratifying for KRAS WT cell lines would show the best responders.
+```{r}
+
+# Supp table from pmid 27821489 showing mutational status of kras for most cell lines
+# converted from pdf to csv using https://www.zamzar.com/convert/pdf-to-csv/
+f <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/pmid_ 27821489/167650_1_supp_3663141_ddk222.csv', data.table = F)
+
+# select the cell lines with WT KRAS status
+temp <- f %>% dplyr::filter(`Cell line` %in% colnames(clue.erastin.140))
+table(temp$KRAS)
+temp %<>% dplyr::filter(KRAS == 'WT')
+
+# filter the clue cell lines for those WT KRAS sstatus
+clue.erastin.140 <- clue.erastin %>% dplyr::filter(pr_gene_symbol %in% rownames(lines.erastin)) %>% select(-pr_gene_symbol, -lines)
+clue.erastin.140.kras <- clue.erastin.140 %>% dplyr::select(temp$`Cell line`)
+
+set.seed(11)
+Heatmap(lines.erastin,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        row_km = 2,
+        column_title = 'Erastin-Responsive') + 
+
+Heatmap(clue.erastin.140.kras,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        row_km = 2,
+        column_title = 'Clue-Erastin - 140 genes over WT KRAS cell lines')
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
 
 
 
