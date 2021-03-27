@@ -203,8 +203,8 @@ hist(res$log2FoldChange, breaks = 100)
 temp <- res %>% dplyr::filter(abs(log2FoldChange) <.5)
 hist(temp$log2FoldChange, breaks = 100)
 
+# genes with lfc > 1
 table(abs(res$log2FoldChange) >= 1)
-
 
 
 # get genes with fc > 2 (log2fc > 1)
@@ -217,6 +217,9 @@ table(sig %in% topGenes)
 # The genes reported in Elife that aren't coming up in my analysis:
 topGenes[!topGenes %in% sig]
 
+# the fpkm analysis with lfc >2
+fpkm <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.5061_dryad.jp43c__v1/DataPackage1.txt')
+table(fpkm$`Difference Group C/Group A` >= 2)
 
 # save table of genes considered differentially expressed based on Logfc for downstream analysis
 temp <- res %>% dplyr::filter(abs(log2FoldChange) >=1)
