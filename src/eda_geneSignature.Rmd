@@ -1,0 +1,329 @@
+---
+title: "eda_geneSignature"
+author: "Ryan Rebernick"
+date: "3/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Description:
+
+# Load packages
+```{r, warning=F, message=FALSE}
+
+library('plyr')
+library('dplyr')
+library('stringr')
+library('data.table')
+library('tidyverse')
+library('magrittr')
+
+library('ComplexHeatmap')
+
+```
+
+# Find DEGs in common between 3 RNA-seq datasets
+1) Pharmacological inhibition of cystine-glutamate exchange induces endoplasmic reticulum stress and ferroptosis. doi: 10.7554/eLife.02523.
+2) Ferroptotic cell death triggered by conjugated linolenic acids is mediated by ACSL1. (GSE162069)
+3) Ferroptosis is governed by differential regulation of transcription in liver cancer. (GSE104462) PMID: 31108460
+
+
+## Load DEGs
+GSE152069 and GSE104462 were re-analyzed using ensembl v97 assembly. The elife paper only provided fpkm and this was converted to counts. To convert to counts, gene length values were compressed from ensembl 67 - one of the likely assemblies used with the paper based on date. The authors from the elife paper do not deem it pertinent to include which assembly was used. Additionally, for the elife paper DEGs to broaden the number of genes, a fold change > 2 was considered significant regardless of p-value. This was done because a) they did it in the paper, and b) I was having trouble recapitulating their findings using only signfiicant genes.
+```{r}
+
+# elife 
+elife <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elife2014_erastin/rna_seq/elife_degs_erastin_control.txt', data.table = F)
+
+# GSE104462 (erastin)
+gse104462 <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE104462/deseq2/GSE104462_degs_erastin_control.txt', data.table = F)
+
+# GSE162069 (ML162)
+gse162069 <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE162069/deseq2/GSE162069_degs_erastin_control.txt', data.table = F)
+
+
+```
+
+## Filter for significant values
+```{r}
+
+# FDR 0.1
+gse162069 %<>% dplyr::filter(padj <0.10) 
+gse104462 %<>% dplyr::filter(padj <0.10) 
+
+# LFC >= 1
+elife %<>% dplyr::filter(abs(log2FoldChange) >= 1)
+
+```
+
+## Find genes in common between all data sets 
+Only 9 genes in common between all data sets. I think this is becasue the GSE162* data set is crappy and does not even include the System Xc SLC genes w/in it. Unfortunately that dataset is the one with the ML162 inducer rather than erastin. Removing this dataset will reduce the applicablility of the gene signature
+```{r}
+
+all <- gse104462 %>%
+  dplyr::filter(Row.names %in% gse162069$Row.names) %>%
+  dplyr::filter(Row.names %in% elife$Row.names)
+
+
+```
+
+## Find genes in common between the erastin data sets
+```{r}
+
+# genes in common
+erastin <- gse104462 %>%
+  dplyr::filter(Row.names %in% elife$Row.names)
+
+# ensure they change in the same way
+## format dfs
+erastin %<>% set_rownames(erastin$Row.names) %>%
+  select(log2FoldChange, padj, SRR6122015:SRR6122020)
+elife %<>% set_rownames(elife$Row.names) %>%
+  select(log2FoldChange, padj, dmso_1:erastin_bme_2)
+## merge
+erastin <- merge(erastin, elife, by = 0)
+## select desired cols
+erastin %<>% set_rownames(erastin$Row.names) %>%
+  select(log2FoldChange.x, padj.x, log2FoldChange.y, padj.y, SRR6122015:SRR6122020, dmso_1:erastin_bme_2)
+colnames(erastin)[1:4] <- c('gme104462_lfc', 'gme104462_padj', 'elife_lfc', 'elife_padj')
+## ensure change in same way
+erastin %<>% dplyr::filter((elife_lfc > 0 & gme104462_lfc > 0) | (elife_lfc < 0 & gme104462_lfc < 0))
+
+```
+
+# Lets see how these genes look in the Clue erastin treated cells
+Hint: they're pretty dirty
+
+## Clean clue data from cells exposed to erastin 
+Simplifies the erastin clue data (zscores) based on timepoint to allow for downstream analysis. 
+```{r}
+
+# clue erastin - loaded as 2 seperate files because of export limits of clue.io
+clue.erastin <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/erastin/clue_v1.3_erastin_1.gct', skip = 2, data.table = F)
+temp <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/erastin/clue_v1.3_erastin_2.gct', skip = 2, data.table = F)
+
+# merge clue erastin files
+clue.erastin[,90:97] <- temp[,10:17]
+
+
+# eliminate 24h time point, keeping only 6 hour
+clue.erastin =  clue.erastin[, c(rep(T, 9) ,clue.erastin[6, 10:ncol(clue.erastin)] == '6 h')]
+
+# Shift cell line name to column name and eliminate other metadata
+colnames(clue.erastin)[10:ncol(clue.erastin)] <- clue.erastin[1,10:ncol(clue.erastin)]
+clue.erastin <- clue.erastin[9:length(clue.erastin$id),]
+
+# convert to numeric
+clue.erastin[10:ncol(clue.erastin)] <- apply(clue.erastin[10:ncol(clue.erastin)], 2, as.numeric)
+
+# select cols to keep for correlation
+clue.erastin %<>% dplyr::select(-id, -pr_gene_title, -pr_is_lm, -pr_is_bing, -self_correlation, -frac_self_rank, -p_value, -gene_space)
+
+```
+
+## Get specifically the KRAS WT cell lines
+KRAS directly binds GPX4 to inhibit ferroptosis. Stratifying for KRAS WT cell lines would show the best responders.
+```{r}
+
+# Supp table from pmid 27821489 showing mutational status of kras for most cell lines
+# converted from pdf to csv using https://www.zamzar.com/convert/pdf-to-csv/
+f <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/pmid_ 27821489/167650_1_supp_3663141_ddk222.csv', data.table = F)
+
+# select the cell lines with WT KRAS status
+f %<>% dplyr::filter(KRAS == 'WT') %>% 
+  filter(`Cell line` %in% colnames(clue.erastin))
+
+# filter the clue data set so only these cell lines are used
+clue.erastin.kras <- clue.erastin %>% 
+  set_rownames(clue.erastin$pr_gene_symbol) %>%
+    dplyr::select(f$`Cell line`)
+
+```
+
+## Clean the erastin LFCs for plotting
+```{r}
+
+erastin.plot <- erastin %>%
+  dplyr::select(gme104462_lfc, elife_lfc) %>%
+  dplyr::filter(rownames(.) %in% rownames(clue.erastin.kras)) %>%
+  dplyr::arrange(gme104462_lfc)
+
+```
+
+## Stratify the clue cell lines by the genes of interest
+Very few of them actually represented in the clue dataset. 
+```{r}
+
+# filter clue dataset for genes of interest
+clue.erastin.kras.sub <- clue.erastin.kras %>%
+  dplyr::filter(rownames(.) %in% rownames(erastin)) 
+
+# make rownames in same order as erastin.plot
+clue.erastin.kras.sub <- clue.erastin.kras.sub[order(match(rownames(clue.erastin.kras.sub),rownames(erastin.plot))),]
+
+```
+
+## Plot in heatmap
+```{r}
+
+set.seed(11)
+Heatmap(erastin.plot,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        row_km = 2,
+        column_title = 'RNA-seq') +
+  
+Heatmap(clue.erastin.kras.sub,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_title = 'Clue-Erastin w/ WT KRAS')
+
+```
+
+## Try to make it prettier
+Changing to factor slicing allows for clustering w/in slices. Doesn't really make a significant difference tbh.
+```{r}
+
+set.seed(11)
+Heatmap(clue.erastin.kras.sub,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = T,
+        cluster_rows = T,
+        cluster_columns = T,
+        clustering_method_rows = "complete",
+        clustering_method_columns = "complete",
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_title = 'Clue-Erastin w/ WT KRAS',
+        row_split = c(rep('down', 24), rep('up', 43))) +
+  Heatmap(erastin.plot,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        row_km = 2,
+        column_title = 'RNA-seq')
+  
+
+```
+
+## Add in the other dataset
+
+```{r}
+
+# GSE162069 (ML162)
+gse162069 <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE162069/deseq2/GSE162069_degs_erastin_control.txt', data.table = F)
+
+gse162069 %<>% filter(Row.names %in% rownames(erastin.plot))
+gse162069 %<>% set_rownames(gse162069$Row.names) %>%
+  select(log2FoldChange, Row.names)
+
+# make rownames in same order as erastin.plot
+gse162069 <- gse162069[order(match(rownames(gse162069),rownames(erastin.plot))),]
+gse162069 %<>% dplyr::select(-Row.names)
+colnames(gse162069) <- 'GSE162069'
+
+set.seed(11)
+Heatmap(erastin.plot,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        row_km = 2,
+        column_title = 'RNA-seq') + 
+
+  Heatmap(gse162069,
+        show_column_dend = F,
+        show_row_dend = F,
+        column_names_gp = gpar(fontsize = 7)) + 
+  
+Heatmap(clue.erastin.kras.sub,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_title = 'Clue-Erastin w/ WT KRAS') 
+
+```
+
+## "Erastin-responsive" cell lines
+
+```{r}
+
+responsive <- c("WSUDLCL2", "NCIH508", "EFO27", "VCAP", "U937", "JHUEM2", "OV7", "HEPG2")
+
+clue.erastin.resp <- clue.erastin %>% 
+  set_rownames(clue.erastin$pr_gene_symbol) %>%
+  dplyr::select(responsive) 
+clue.erastin.resp %<>% dplyr::filter(rownames(.) %in% rownames(erastin)) 
+
+# make rownames in same order as erastin.plot
+clue.erastin.resp <- clue.erastin.resp[order(match(rownames(clue.erastin.resp),rownames(erastin.plot))),]
+
+
+set.seed(11)
+Heatmap(erastin.plot,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        row_km = 2,
+        column_title = 'RNA-seq') + 
+
+  Heatmap(gse162069,
+        show_column_dend = F,
+        show_row_dend = F,
+        column_names_gp = gpar(fontsize = 7)) + 
+  
+Heatmap(clue.erastin.resp,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_title = 'Clue-Erastin w/ WT KRAS')
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
