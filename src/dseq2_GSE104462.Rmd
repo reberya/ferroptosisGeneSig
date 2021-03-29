@@ -63,6 +63,9 @@ tx2gene <- getBM(attributes = c('ensembl_transcript_id_version', 'external_gene_
 
 ```
 
+# All samples 
+Check to see which gives more differentially expressed genes - using all samples or using only the samples being compared. All samples will be looked at first
+
 ## Import from kallisto and run DESeq2
 ```{r}
 
@@ -94,6 +97,55 @@ dds <- DESeq(dds)
 res <- results(dds, contrast=c("condition","Hepg2_erastin","Hepg2"))
 summary(res)
 
+# for comparison
+hold <- res
+
+```
+
+
+
+# 6 samples being compared 
+Check to see which gives more differentially expressed genes - using all samples or using only the samples being compared. 
+
+## Import from kallisto and run DESeq2
+```{r}
+
+# access the file paths from kallisto output
+dir <- '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/kallisto/GSE104462/'
+files <- list.files(dir, pattern = 'abundance.h5', recursive = T)
+files <- paste0(dir, files)
+names(files) <- list.files(dir)
+
+# stratify for 6 samples being used
+files <- files[1:6]
+
+# import at gene level
+txi.kallisto <- tximport(files, type = "kallisto", tx2gene = tx2gene)
+head(txi.kallisto$counts)
+
+# create sample table for import from tximport
+sampleTable <- data.frame(condition = factor(rep(c("Hepg2", "Hepg2_erastin"), each = 3)))
+
+rownames(sampleTable) <- colnames(txi.kallisto$counts)
+
+# import into DESeq2
+dds <- DESeqDataSetFromTximport(txi.kallisto, sampleTable, ~condition)
+
+# Run DESeq2
+dds <- DESeq(dds)
+```
+
+## Differential expression analysis of erastin vs control using only erastin/control samples
+More DEGs when just using the erastin/control samples than when including the ferrostatin samples in the analysis
+```{r}
+
+# get DE
+res <- results(dds, contrast=c("condition","Hepg2_erastin","Hepg2"))
+summary(res)
+
+# compare vs all samples
+summary(hold)
+
 # distribution of p values
 hist(res$pvalue)
 
@@ -102,15 +154,13 @@ res <- as.data.frame(res@listData, row.names = res@rownames)
 
 # combine with count info
 res_counts <- merge(res, txi.kallisto$counts, by = 0)
+res_counts %<>% arrange(padj)
 
 # save 
 write.table(res_counts, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE104462/deseq2/GSE104462_degs_erastin_control.txt',
             row.names = T, col.names = T, quote = F, sep = '\t')
 
 ```
-
-
-
 
 
 
