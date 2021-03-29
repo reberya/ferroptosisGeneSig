@@ -1,0 +1,128 @@
+---
+title: "deseq2_GSE104462"
+author: "Ryan Rebernick"
+date: "3/28/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Description:
+
+
+## Load packages
+```{r, warning=F, message=FALSE}
+
+library('plyr')
+library('dplyr') # interferes with biomart
+library('stringr')
+library('data.table')
+library('tidyverse')
+library('magrittr')
+
+library('DESeq2')
+library('tximport')
+library('tximportData')
+library('rhdf5')
+
+```
+
+
+## Transcript to gene
+Used ensembl v97 - the same as used to create the index file for kallisto
+```{r}
+
+library('biomaRt')
+
+# archive ensembl to match the kalliso index 
+listEnsemblArchives()
+listEnsembl(version = 97)
+ensembl97 <- useEnsembl(biomart = 'ensembl', 
+                       dataset = 'hsapiens_gene_ensembl',
+                       version = 97)
+
+# look at attributes/filters
+listAttributes(ensembl97)
+searchFilters(mart = ensembl97, pattern = "chromosome")
+
+# get transcripts and genes
+tx2gene <- getBM(attributes = c('ensembl_transcript_id_version', 'ensembl_gene_id_version'),
+      filters = 'chromosome_name',
+      values = c(1:22, 'X', 'Y'), 
+      mart = ensembl97,
+      useCache = F)
+
+tx2gene <- getBM(attributes = c('ensembl_transcript_id_version', 'external_gene_name'),
+      filters = 'chromosome_name',
+      values = c(1:22, 'X', 'Y'), 
+      mart = ensembl97,
+      useCache = F)
+
+
+```
+
+## Import from kallisto and run DESeq2
+```{r}
+
+# access the file paths from kallisto output
+dir <- '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/kallisto/GSE104462/'
+files <- list.files(dir, pattern = 'abundance.h5', recursive = T)
+files <- paste0(dir, files)
+names(files) <- list.files(dir)
+
+# import at gene level
+txi.kallisto <- tximport(files, type = "kallisto", tx2gene = tx2gene)
+head(txi.kallisto$counts)
+
+# create sample table for import from tximport
+sampleTable <- data.frame(condition = factor(rep(c("Hepg2", "Hepg2_erastin", "Hepg2_ferrostatin"), each = 3)))
+rownames(sampleTable) <- colnames(txi.kallisto$counts)
+
+# import into DESeq2
+dds <- DESeqDataSetFromTximport(txi.kallisto, sampleTable, ~condition)
+
+# Run DESeq2
+dds <- DESeq(dds)
+```
+
+## Differential expression analysis of erastin vs control using only erastin/control samples
+```{r}
+
+# get DE
+res <- results(dds, contrast=c("condition","Hepg2_erastin","Hepg2"))
+summary(res)
+
+# distribution of p values
+hist(res$pvalue)
+
+# convert to data frame
+res <- as.data.frame(res@listData, row.names = res@rownames)
+
+# combine with count info
+res_counts <- merge(res, txi.kallisto$counts, by = 0)
+
+# save 
+write.table(res_counts, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE104462/deseq2/GSE104462_degs_erastin_control.txt',
+            row.names = T, col.names = T, quote = F, sep = '\t')
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
