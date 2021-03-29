@@ -185,7 +185,7 @@ table(hold_model_all$lfcSE > hold_model_cntEras$lfcSE)
 
 ```
 
-### Take genes with logFC > 2
+### Quick look at how fold change data distributes and how relates to fpkm data
 ```{r}
 
 # look at dist of logfc
@@ -198,6 +198,9 @@ hist(temp$log2FoldChange, breaks = 100)
 # genes with lfc > 1
 table(abs(res$log2FoldChange) >= 1)
 
+# the fpkm analysis with fc >2
+fpkm <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.5061_dryad.jp43c__v1/DataPackage1.txt')
+table(fpkm$`Difference Group C/Group A` >= 2)
 
 # get genes with fc > 2 (log2fc > 1)
 sig <- res %>% filter(abs(log2FoldChange) >= 1) %>%
@@ -209,13 +212,19 @@ table(sig %in% topGenes)
 # The genes reported in Elife that aren't coming up in my analysis:
 topGenes[!topGenes %in% sig]
 
-# the fpkm analysis with lfc >2
-fpkm <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.5061_dryad.jp43c__v1/DataPackage1.txt')
-table(fpkm$`Difference Group C/Group A` >= 2)
+
+```
+
+### Save results for downstream
+```{r}
+
+
+# combine with count info
+res_counts <- merge(res, counts, by = 0)
+res_counts %<>% arrange(padj)
 
 # save table of genes considered differentially expressed based on Logfc for downstream analysis
-temp <- res %>% dplyr::filter(abs(log2FoldChange) >=1)
-write.table(temp, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elife2014_erastin/rna_seq/sig_genes_log2fc.txt', quote = F, sep = '\t', row.names = T, col.names = T)
+write.table(res, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elife2014_erastin/rna_seq/elife_degs_erastin_control.txt', quote = F, sep = '\t', row.names = T, col.names = T)
 
 
 ```
