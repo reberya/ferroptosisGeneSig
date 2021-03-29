@@ -33,12 +33,8 @@ library(DESeq2)
 counts <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elife2014_erastin/rna_seq/elife_counts_from_fpkm.txt', data.table = F)
 
 # modify counts for deseq input
-## sum of expression for controls/erastin used for filtering 
-counts$sums <- rowSums(counts[, c('dmso_1', 'dmso_2', 'erastin_1', 'erastin_2')])
-## expression >4 across 4 samples
-counts %<>% dplyr::filter(sums >= 10)
 ## rownames
-counts %<>% set_rownames(counts$gene) %>% select(-gene, -sums)
+counts %<>% set_rownames(counts$gene) %>% select(-gene)
 
 # create coldata
 condition <- factor(c('cntrl','cntrl','bme','bme','erastin','erastin','erastin_bme','erastin_bme'), 
@@ -114,12 +110,8 @@ topGenes[!topGenes %in% sig]
 counts <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elife2014_erastin/rna_seq/elife_counts_from_fpkm.txt', data.table = F)
 
 # modify counts for deseq input
-## sum of expression for controls/erastin used for filtering 
-counts$sums <- rowSums(counts[, c('dmso_1', 'dmso_2', 'erastin_1', 'erastin_2')])
-## expression >4 across 4 samples
-counts %<>% dplyr::filter(sums >= 10)
 ## rownames
-counts %<>% set_rownames(counts$gene) %>% select(-gene, -sums)
+counts %<>% set_rownames(counts$gene) %>% select(-gene)
 
 # eliminate other samples
 counts %<>% dplyr::select(-bme_1, -bme_2, -erastin_bme_1, -erastin_bme_2)
