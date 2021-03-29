@@ -19,3 +19,13 @@ bioawk -c fastx '{print length($seq)}' \
 
 bioawk -c fastx '{print length($seq)}' \
 /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE162069/fastq/SRR13125333.fastq > /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE162069/seqLengths/SRR13125333_fragLen.txt
+
+bioawk -c fastx '{print length($seq)}' \
+/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE162069/fastq/SRR13125334.fastq > /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE162069/seqLengths/SRR13125334_fragLen.txt
+
+bioawk -c fastx '{print length($seq)}' \
+/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE162069/fastq/SRR13125335.fastq > /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE162069/seqLengths/SRR13125335_fragLen.txt
+
+bioawk -c fastx '{print length($seq)}' \
+/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE162069/fastq/SRR13125336.fastq > /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE162069/seqLengths/SRR13125336_fragLen.txt
+
