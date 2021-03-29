@@ -64,6 +64,9 @@ tx2gene <- getBM(attributes = c('ensembl_transcript_id_version', 'external_gene_
 
 ```
 
+# All samples
+Check to see if is better to include all samples or just ones directly being compared. All samples looked @ first. 
+
 ## Import from kallisto and run DESeq2
 ```{r}
 
@@ -97,6 +100,54 @@ dds <- DESeq(dds)
 res <- results(dds, contrast=c("condition","MDAMB231_ML162","MDAMB231"))
 summary(res)
 
+# save for comparison
+hold <- res
+
+
+```
+
+
+# Only samples being compared
+
+## Import from kallisto and run DESeq2
+```{r}
+
+# access the file paths from kallisto output
+dir <- '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/kallisto/GSE162069/'
+files <- list.files(dir, pattern = 'abundance.h5', recursive = T)
+files <- paste0(dir, files)
+names(files) <- list.files(dir)
+
+# select samples being compared
+files <- files[1:5]
+
+# import at gene level
+txi.kallisto <- tximport(files, type = "kallisto", tx2gene = tx2gene)
+head(txi.kallisto$counts)
+
+# create sample table for import from tximport
+sampleTable <- data.frame(condition = factor(c(rep("MDAMB231", 2), rep("MDAMB231_ML162", 3))))
+rownames(sampleTable) <- colnames(txi.kallisto$counts)
+
+# import into DESeq2
+dds <- DESeqDataSetFromTximport(txi.kallisto, sampleTable, ~condition)
+
+# Run DESeq2
+dds <- DESeq(dds)
+
+
+```
+
+## Differential expression analysis of erastin vs control using only erastin/control samples
+Better to only include samples in direct comparison
+```{r}
+
+# get DE
+res <- results(dds, contrast=c("condition","MDAMB231_ML162","MDAMB231"))
+summary(res)
+
+summary(hold)
+
 # distribution of p values
 hist(res$pvalue)
 
@@ -105,6 +156,7 @@ res <- as.data.frame(res@listData, row.names = res@rownames)
 
 # combine with count info
 res_counts <- merge(res, txi.kallisto$counts, by = 0)
+res_counts %<>% arrange(padj)
 
 # save 
 write.table(res_counts, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE162069/deseq2/GSE162069_degs_erastin_control.txt',
@@ -112,8 +164,6 @@ write.table(res_counts, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/
 
 
 ```
-
-
 
 
 
