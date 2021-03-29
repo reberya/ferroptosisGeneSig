@@ -26,6 +26,18 @@ fastqc -o /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE104462/f
 /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE104462/fastq/SRR6122020_1.fastq \
 /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE104462/fastq/SRR6122020_2.fastq
 
+fastqc -o /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE104462/fastqc \
+/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE104462/fastq/SRR6122021_1.fastq \
+/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE104462/fastq/SRR6122021_2.fastq
+
+fastqc -o /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE104462/fastqc \
+/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE104462/fastq/SRR6122022_1.fastq \
+/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE104462/fastq/SRR6122022_2.fastq
+
+fastqc -o /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE104462/fastqc \
+/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE104462/fastq/SRR6122023_1.fastq \
+/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE104462/fastq/SRR6122023_2.fastq
+
 
 # Summarize with multiqc
 

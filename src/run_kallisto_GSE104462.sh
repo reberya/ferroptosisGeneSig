@@ -39,3 +39,21 @@ kallisto quant \
 -o /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/kallisto/GSE104462/SRR6122020 \
 /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE104462/fastq/SRR6122020_*.fastq
 
+## SRR6122021
+kallisto quant \
+-i /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/kallisto/index/homo_sapiens_ensembl_97.tar \
+-o /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/kallisto/GSE104462/SRR6122021 \
+/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE104462/fastq/SRR6122021_*.fastq
+
+## SRR6122022
+kallisto quant \
+-i /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/kallisto/index/homo_sapiens_ensembl_97.tar \
+-o /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/kallisto/GSE104462/SRR6122022 \
+/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE104462/fastq/SRR6122022_*.fastq
+
+## SRR6122023
+kallisto quant \
+-i /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/kallisto/index/homo_sapiens_ensembl_97.tar \
+-o /mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/kallisto/GSE104462/SRR6122023 \
+/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/GSE104462/fastq/SRR6122023_*.fastq
+
