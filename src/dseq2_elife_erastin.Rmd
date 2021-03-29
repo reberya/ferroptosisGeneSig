@@ -224,7 +224,7 @@ res_counts <- merge(res, counts, by = 0)
 res_counts %<>% arrange(padj)
 
 # save table of genes considered differentially expressed based on Logfc for downstream analysis
-write.table(res, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elife2014_erastin/rna_seq/elife_degs_erastin_control.txt', quote = F, sep = '\t', row.names = T, col.names = T)
+write.table(res_counts, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elife2014_erastin/rna_seq/elife_degs_erastin_control.txt', quote = F, sep = '\t', row.names = T, col.names = T)
 
 
 ```
