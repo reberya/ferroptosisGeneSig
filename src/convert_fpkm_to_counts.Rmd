@@ -71,7 +71,7 @@ fpkm %<>% dplyr::select(GeneID:`Erastin+BME_2`) %>%
 fpkm[,2:9] = fpkm[,2:9]*(fpkm$x)
 
 # Multiply by total reads per sample
-fpkm[,2:9] = fpkm[,2:9]*10.25e6
+fpkm[,2:9] = fpkm[,2:9]*15.25e6
 
 # divide by scaling factor which accounts for the kilobase per million mapped units
 fpkm[,2:9] = fpkm[,2:9]/(10e9)
