@@ -124,8 +124,71 @@ erastin %<>% dplyr::filter((elife_lfc > 0 & gme104462_lfc > 0) | (elife_lfc < 0 
 # Lets prep the clue data so we can see how our genes of interest will look in this dataset.
 Hint: It won't be clean....
 
-## Clean clue data from cells exposed to erastin 
-Simplifies the erastin clue data (zscores) based on timepoint to allow for downstream analysis. 
+## Function to clean clue data
+```{r}
+
+clean_clue <- function(clue, dose = '10 µM', time = '6 h', see_avail_opts = T){
+  
+  # If fxn allows for viewing avail options for timepoints/concentrations
+  if (see_avail_opts == T) {
+    # print available cell lines and doses
+    temp <- as.data.frame(t(unname(clue[c(1,5),10:ncol(clue)])))
+    colnames(temp) <- c('line', 'dose')
+    print(table(temp$line, temp$dose))
+    
+        # print available time points and doses
+    temp <- as.data.frame(t(unname(clue[5:6,10:ncol(clue)])))
+    colnames(temp) <- c('dose', 'time')
+    print(table(temp$dose, temp$time))
+  }
+  
+  else {
+    # keep time point of interest
+    if(!is.null(time)){
+      clue =  clue[, c(rep(T, 9) ,clue[6, 10:ncol(clue)] == time)]
+    }
+    
+    # keep dose of interest
+    if(!is.null(dose)){
+    clue =  clue[, c(rep(T, 9) ,clue[5, 10:ncol(clue)] == dose)]
+    }
+    
+    # separate metadata from z scores for duplicate removal
+    temp <- clue[, 10:ncol(clue)] # z scores
+    clue <- clue[,1:9] # meta
+    
+    # For duplicates, keep the replicate with a higher distil_cc_q75
+    # This is the replicate consistency score (spearman correlation between replicates of lvl 4 profile)
+    # https://clue.io/connectopedia/category/Analytical%20Methods
+    ## order z scores by the distil_cc_q75 to facilitate removal of lower distil value
+    temp <- temp[,rev(order(temp[7,]))]
+    
+    # recombine z scores with metadata
+    clue[,10:(10+length(temp))] <- temp
+    
+    # Rename columns with cell line
+    colnames(clue)[10:ncol(clue)] <- clue[1,10:ncol(clue)]
+    
+    # remove duplicate columns, keeping the one with the higher distil_cc_q75 score (higher corr between reps)
+    # works because ordered by distil score above
+    clue <- clue[,!duplicated(colnames(clue))]
+    
+    # elimiante unecessary meta data
+    clue <- clue[9:length(clue$id),]
+    
+    # convert to numeric
+    clue[10:ncol(clue)] <- apply(clue[10:ncol(clue)], 2, as.numeric)
+    
+    # select cols to keep for correlation
+    clue %<>% dplyr::select(-id, -pr_gene_title, -pr_is_lm, -pr_is_bing, -self_correlation, -frac_self_rank, -p_value, -gene_space)
+    
+    return(clue)
+  }
+}
+
+```
+
+## Clean clue data from cells exposed to erastin
 ```{r}
 
 # clue erastin - loaded as 2 seperate files because of export limits of clue.io
@@ -135,19 +198,17 @@ temp <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/clue/
 # merge clue erastin files
 clue.erastin[,90:97] <- temp[,10:17]
 
+# see options
+clean_clue(clue.erastin, see_avail_opts = T)
 
-# eliminate 24h time point, keeping only 6 hour
-clue.erastin =  clue.erastin[, c(rep(T, 9) ,clue.erastin[6, 10:ncol(clue.erastin)] == '6 h')]
+# 5um, 6h
+clue.erastin_6h_5um <- clean_clue(clue.erastin, dose = '5 µM', time = '6 h', see_avail_opts = F)
 
-# Shift cell line name to column name and eliminate other metadata
-colnames(clue.erastin)[10:ncol(clue.erastin)] <- clue.erastin[1,10:ncol(clue.erastin)]
-clue.erastin <- clue.erastin[9:length(clue.erastin$id),]
+# 5um, 24h
+clue.erastin_24h_5um <- clean_clue(clue.erastin, dose = '5 µM', time = '24 h', see_avail_opts = F)
 
-# convert to numeric
-clue.erastin[10:ncol(clue.erastin)] <- apply(clue.erastin[10:ncol(clue.erastin)], 2, as.numeric)
-
-# select cols to keep for correlation
-clue.erastin %<>% dplyr::select(-id, -pr_gene_title, -pr_is_lm, -pr_is_bing, -self_correlation, -frac_self_rank, -p_value, -gene_space)
+# 10um, 24h
+clue.erastin_24h_10um <- clean_clue(clue.erastin, dose = '10 µM', time = '24 h', see_avail_opts = F)
 
 ```
 
@@ -161,11 +222,11 @@ f <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/pmid_ 27
 
 # select the cell lines with WT KRAS status
 f %<>% dplyr::filter(KRAS == 'WT') %>% 
-  filter(`Cell line` %in% colnames(clue.erastin))
+  filter(`Cell line` %in% colnames(clue.erastin_6h_5um))
 
 # filter the clue data set so only these cell lines are used
-clue.erastin.kras <- clue.erastin %>% 
-  set_rownames(clue.erastin$pr_gene_symbol) %>%
+clue.erastin_6h_5um.kras <- clue.erastin_6h_5um %>% 
+  set_rownames(clue.erastin_6h_5um$pr_gene_symbol) %>%
     dplyr::select(f$`Cell line`)
 
 ```
@@ -179,7 +240,7 @@ all.plot <- all %>%
   ## select cols
   dplyr::select(gme104462_lfc, elife_lfc, gme162069_lfc) %>%
   ## keep only genes from the clue dataset
-  dplyr::filter(rownames(.) %in% rownames(clue.erastin.kras)) %>%
+  dplyr::filter(rownames(.) %in% rownames(clue.erastin_6h_5um.kras)) %>%
   ## sort by lfc
   dplyr::arrange(gme104462_lfc)
 
@@ -190,11 +251,11 @@ Very few of them actually represented in the clue dataset.
 ```{r}
 
 # filter clue dataset for genes of interest
-clue.erastin.kras.sub <- clue.erastin.kras %>%
+clue.erastin_6h_5um.kras.sub <- clue.erastin_6h_5um.kras %>%
   dplyr::filter(rownames(.) %in% rownames(all.plot)) 
 
 # make rownames in same order as erastin.plot
-clue.erastin.kras.sub <- clue.erastin.kras.sub[order(match(rownames(clue.erastin.kras.sub),rownames(all.plot))),]
+clue.erastin_6h_5um.kras.sub <- clue.erastin_6h_5um.kras.sub[order(match(rownames(clue.erastin_6h_5um.kras.sub),rownames(all.plot))),]
 
 ```
 
@@ -217,7 +278,7 @@ Heatmap(all.plot,
         col = col_fun
         ) +
   
-Heatmap(clue.erastin.kras.sub,
+Heatmap(clue.erastin_6h_5um.kras.sub,
         show_column_dend = F,
         show_row_dend = F,
         show_row_names = T,
@@ -238,7 +299,7 @@ erastin.plot <- erastin %>%
   ## select cols
   dplyr::select(gme104462_lfc, elife_lfc) %>%
   ## keep only genes from the clue dataset
-  dplyr::filter(rownames(.) %in% rownames(clue.erastin.kras)) %>%
+  dplyr::filter(rownames(.) %in% rownames(clue.erastin_6h_5um.kras)) %>%
   ## sort by lfc
   dplyr::arrange(gme104462_lfc)
 
@@ -249,11 +310,11 @@ Very few of them actually represented in the clue dataset.
 ```{r}
 
 # filter clue dataset for genes of interest
-clue.erastin.kras.sub <- clue.erastin.kras %>%
+clue.erastin_6h_5um.kras.sub <- clue.erastin_6h_5um.kras %>%
   dplyr::filter(rownames(.) %in% rownames(erastin)) 
 
 # make rownames in same order as erastin.plot
-clue.erastin.kras.sub <- clue.erastin.kras.sub[order(match(rownames(clue.erastin.kras.sub),rownames(erastin.plot))),]
+clue.erastin_6h_5um.kras.sub <- clue.erastin_6h_5um.kras.sub[order(match(rownames(clue.erastin_6h_5um.kras.sub),rownames(erastin.plot))),]
 
 
 ```
@@ -270,7 +331,7 @@ Heatmap(erastin.plot,
         row_km = 2,
         column_title = 'RNA-seq') +
   
-Heatmap(clue.erastin.kras.sub,
+Heatmap(clue.erastin_6h_5um.kras.sub,
         show_column_dend = F,
         show_row_dend = F,
         show_row_names = F,
@@ -289,7 +350,7 @@ up <- table(erastin.plot$gme104462_lfc > 0)[2]
 down <- table(erastin.plot$gme104462_lfc > 0)[1]
 
 set.seed(11)
-Heatmap(clue.erastin.kras.sub,
+Heatmap(clue.erastin_6h_5um.kras.sub,
         show_column_dend = F,
         show_row_dend = F,
         show_row_names = T,
@@ -313,7 +374,7 @@ Heatmap(clue.erastin.kras.sub,
 
 ```
 
-## Add in the other dataset
+## Add in the other RNA-seq dataset
 
 ```{r}
 
@@ -343,7 +404,7 @@ Heatmap(erastin.plot,
         show_row_dend = F,
         column_names_gp = gpar(fontsize = 7)) + 
   
-Heatmap(clue.erastin.kras.sub,
+Heatmap(clue.erastin_6h_5um.kras.sub,
         show_column_dend = F,
         show_row_dend = F,
         show_row_names = F,
@@ -353,19 +414,88 @@ Heatmap(clue.erastin.kras.sub,
 
 ```
 
+## Add in the other clue.io erastin timepoints/dosages
+
+```{r}
+
+# 24h 5um Erastin
+## filter clue dataset for genes of interest
+clue.erastin_24h_5um.sub <- clue.erastin_24h_5um %>%
+  set_rownames(clue.erastin_24h_5um$pr_gene_symbol) %>%
+  dplyr::select(-pr_gene_symbol)
+clue.erastin_24h_5um.sub %<>% dplyr::filter(rownames(.) %in% rownames(erastin)) 
+## make rownames in same order as erastin.plot
+clue.erastin_24h_5um.sub <- clue.erastin_24h_5um.sub[order(match(rownames(clue.erastin_24h_5um.sub),rownames(erastin.plot))),]
+
+# 24h 10um Erastin
+## filter clue dataset for genes of interest
+clue.erastin_24h_10um.sub <- clue.erastin_24h_10um %>%
+  set_rownames(clue.erastin_24h_10um$pr_gene_symbol) %>%
+  dplyr::select(-pr_gene_symbol)
+clue.erastin_24h_10um.sub %<>% dplyr::filter(rownames(.) %in% rownames(erastin)) 
+## make rownames in same order as erastin.plot
+clue.erastin_24h_10um.sub <- clue.erastin_24h_10um.sub[order(match(rownames(clue.erastin_24h_10um.sub),rownames(erastin.plot))),]
+
+
+
+set.seed(11)
+Heatmap(erastin.plot,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        row_km = 2,
+        column_title = 'RNA-seq',
+        show_heatmap_legend = F) + 
+
+  Heatmap(gse162069,
+        show_column_dend = F,
+        show_row_dend = F,
+        column_names_gp = gpar(fontsize = 7),
+        show_heatmap_legend = F) + 
+  
+Heatmap(clue.erastin_6h_5um.kras.sub,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_title = 'Clue-Erastin 5um-6h',
+        show_heatmap_legend = F) +
+  
+Heatmap(clue.erastin_24h_5um.sub,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = '5um-24h',
+        show_heatmap_legend = F) +
+  
+  Heatmap(clue.erastin_24h_10um.sub,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = '10um-24h',
+        show_heatmap_legend = F)
+```
+
+
+
+
 ## "Erastin-responsive" cell lines
 
 ```{r}
 
 responsive <- c("WSUDLCL2", "NCIH508", "EFO27", "VCAP", "U937", "JHUEM2", "OV7", "HEPG2")
 
-clue.erastin.resp <- clue.erastin %>% 
-  set_rownames(clue.erastin$pr_gene_symbol) %>%
+clue.erastin_6h_5um.resp <- clue.erastin_6h_5um %>% 
+  set_rownames(clue.erastin_6h_5um$pr_gene_symbol) %>%
   dplyr::select(responsive) 
-clue.erastin.resp %<>% dplyr::filter(rownames(.) %in% rownames(erastin)) 
+clue.erastin_6h_5um.resp %<>% dplyr::filter(rownames(.) %in% rownames(erastin)) 
 
 # make rownames in same order as erastin.plot
-clue.erastin.resp <- clue.erastin.resp[order(match(rownames(clue.erastin.resp),rownames(erastin.plot))),]
+clue.erastin_6h_5um.resp <- clue.erastin_6h_5um.resp[order(match(rownames(clue.erastin_6h_5um.resp),rownames(erastin.plot))),]
 
 
 set.seed(11)
@@ -382,7 +512,7 @@ Heatmap(erastin.plot,
         show_row_dend = F,
         column_names_gp = gpar(fontsize = 7)) + 
   
-Heatmap(clue.erastin.resp,
+Heatmap(clue.erastin_6h_5um.resp,
         show_column_dend = F,
         show_row_dend = F,
         show_row_names = T,
