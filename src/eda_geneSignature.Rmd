@@ -64,9 +64,34 @@ elife %<>% dplyr::filter(abs(log2FoldChange) >= 1)
 Only 9 genes in common between all data sets. I think this is becasue the GSE162* data set is crappy and does not even include the System Xc SLC genes w/in it. Unfortunately that dataset is the one with the ML162 inducer rather than erastin. Removing this dataset will reduce the applicablility of the gene signature
 ```{r}
 
+# genes in common
 all <- gse104462 %>%
   dplyr::filter(Row.names %in% gse162069$Row.names) %>%
   dplyr::filter(Row.names %in% elife$Row.names)
+
+# ensure they change in the same way
+## format dfs
+all %<>% set_rownames(all$Row.names) %>%
+  select(log2FoldChange, padj, SRR6122015:SRR6122020)
+elife.sub <- elife %>% set_rownames(elife$Row.names) %>%
+  select(log2FoldChange, padj, dmso_1:erastin_bme_2)
+gse162069.sub <- gse162069 %>% set_rownames(gse162069$Row.names) %>%
+  select(log2FoldChange, padj, SRR13125329:SRR13125333)
+## merge elife and GSE104462
+all <- merge(all, elife.sub, by = 0)
+## select desired cols
+all %<>% set_rownames(all$Row.names) %>%
+  select(log2FoldChange.x, padj.x, log2FoldChange.y, padj.y, SRR6122015:SRR6122020, dmso_1:erastin_bme_2)
+colnames(all)[1:4] <- c('gme104462_lfc', 'gme104462_padj', 'elife_lfc', 'elife_padj')
+## merge all and GSE162069
+all <- merge(all, gse162069.sub, by = 0)
+## select desired cols
+all %<>% set_rownames(all$Row.names) %>%
+  select(gme104462_lfc, elife_lfc, log2FoldChange, gme104462_padj, elife_padj, padj, SRR6122015:erastin_bme_2, SRR13125329:SRR13125333)
+colnames(all)[c(3,6)] <- c('gme162069_lfc', 'gme162069_padj')
+
+## ensure change in same way
+all %<>% dplyr::filter((elife_lfc > 0 & gme104462_lfc > 0 & gme162069_lfc > 0) | (elife_lfc < 0 & gme104462_lfc < 0 & gme162069_lfc < 0))
 
 
 ```
@@ -76,16 +101,15 @@ all <- gse104462 %>%
 
 # genes in common
 erastin <- gse104462 %>%
-  dplyr::filter(Row.names %in% elife$Row.names)
+  dplyr::filter(Row.names %in% rownames(elife.sub))
 
 # ensure they change in the same way
 ## format dfs
 erastin %<>% set_rownames(erastin$Row.names) %>%
   select(log2FoldChange, padj, SRR6122015:SRR6122020)
-elife %<>% set_rownames(elife$Row.names) %>%
-  select(log2FoldChange, padj, dmso_1:erastin_bme_2)
+
 ## merge
-erastin <- merge(erastin, elife, by = 0)
+erastin <- merge(erastin, elife.sub, by = 0)
 ## select desired cols
 erastin %<>% set_rownames(erastin$Row.names) %>%
   select(log2FoldChange.x, padj.x, log2FoldChange.y, padj.y, SRR6122015:SRR6122020, dmso_1:erastin_bme_2)
@@ -95,8 +119,10 @@ erastin %<>% dplyr::filter((elife_lfc > 0 & gme104462_lfc > 0) | (elife_lfc < 0 
 
 ```
 
-# Lets see how these genes look in the Clue erastin treated cells
-Hint: they're pretty dirty
+
+
+# Lets prep the clue data so we can see how our genes of interest will look in this dataset.
+Hint: It won't be clean....
 
 ## Clean clue data from cells exposed to erastin 
 Simplifies the erastin clue data (zscores) based on timepoint to allow for downstream analysis. 
@@ -144,12 +170,76 @@ clue.erastin.kras <- clue.erastin %>%
 
 ```
 
+# Genes in common from all RNA-seq dataset
+
+## Clean all LFCs for plotting
+```{r}
+
+all.plot <- all %>%
+  ## select cols
+  dplyr::select(gme104462_lfc, elife_lfc, gme162069_lfc) %>%
+  ## keep only genes from the clue dataset
+  dplyr::filter(rownames(.) %in% rownames(clue.erastin.kras)) %>%
+  ## sort by lfc
+  dplyr::arrange(gme104462_lfc)
+
+```
+
+## Stratify the clue cell lines by the genes of interest
+Very few of them actually represented in the clue dataset. 
+```{r}
+
+# filter clue dataset for genes of interest
+clue.erastin.kras.sub <- clue.erastin.kras %>%
+  dplyr::filter(rownames(.) %in% rownames(all.plot)) 
+
+# make rownames in same order as erastin.plot
+clue.erastin.kras.sub <- clue.erastin.kras.sub[order(match(rownames(clue.erastin.kras.sub),rownames(all.plot))),]
+
+```
+
+## Plot in heatmap
+```{r}
+
+library(circlize)
+
+# color scale for RNA-seq
+col_fun = colorRamp2(c(0, 4), c("white", "red"))
+
+set.seed(11)
+Heatmap(all.plot,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title_gp = gpar(fontsize = 7),
+        column_title = 'All RNA-seq',
+        col = col_fun
+        ) +
+  
+Heatmap(clue.erastin.kras.sub,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_title_gp = gpar(fontsize = 7),
+        column_title = 'Clue-Erastin w/ WT KRAS')
+
+```
+
+
+# Only the erastin datasets (The strongest datasets)
+
 ## Clean the erastin LFCs for plotting
 ```{r}
 
 erastin.plot <- erastin %>%
+  ## select cols
   dplyr::select(gme104462_lfc, elife_lfc) %>%
+  ## keep only genes from the clue dataset
   dplyr::filter(rownames(.) %in% rownames(clue.erastin.kras)) %>%
+  ## sort by lfc
   dplyr::arrange(gme104462_lfc)
 
 ```
@@ -164,6 +254,7 @@ clue.erastin.kras.sub <- clue.erastin.kras %>%
 
 # make rownames in same order as erastin.plot
 clue.erastin.kras.sub <- clue.erastin.kras.sub[order(match(rownames(clue.erastin.kras.sub),rownames(erastin.plot))),]
+
 
 ```
 
@@ -182,7 +273,7 @@ Heatmap(erastin.plot,
 Heatmap(clue.erastin.kras.sub,
         show_column_dend = F,
         show_row_dend = F,
-        show_row_names = T,
+        show_row_names = F,
         row_names_gp = gpar(fontsize = 5),
         column_names_gp = gpar(fontsize = 7),
         column_title = 'Clue-Erastin w/ WT KRAS')
@@ -192,6 +283,10 @@ Heatmap(clue.erastin.kras.sub,
 ## Try to make it prettier
 Changing to factor slicing allows for clustering w/in slices. Doesn't really make a significant difference tbh.
 ```{r}
+
+# number of up/down regulated genes in the erastin datasets
+up <- table(erastin.plot$gme104462_lfc > 0)[2]
+down <- table(erastin.plot$gme104462_lfc > 0)[1]
 
 set.seed(11)
 Heatmap(clue.erastin.kras.sub,
@@ -205,7 +300,7 @@ Heatmap(clue.erastin.kras.sub,
         row_names_gp = gpar(fontsize = 5),
         column_names_gp = gpar(fontsize = 7),
         column_title = 'Clue-Erastin w/ WT KRAS',
-        row_split = c(rep('down', 24), rep('up', 43))) +
+        row_split = c(rep('down', down), rep('up', up))) +
   Heatmap(erastin.plot,
         show_column_dend = F,
         show_row_dend = F,
@@ -251,7 +346,7 @@ Heatmap(erastin.plot,
 Heatmap(clue.erastin.kras.sub,
         show_column_dend = F,
         show_row_dend = F,
-        show_row_names = T,
+        show_row_names = F,
         row_names_gp = gpar(fontsize = 5),
         column_names_gp = gpar(fontsize = 7),
         column_title = 'Clue-Erastin w/ WT KRAS') 
