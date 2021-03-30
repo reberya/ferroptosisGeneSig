@@ -141,7 +141,7 @@ res <- results(dds, contrast=c("condition","erastin","cntrl"))
 summary(res)
 
 # distribution of p values
-hist(res$pvalue)
+hist(res$pvalue, main = 'Elife-erastin p-values')
 
 # convert to data frame and save for comparison
 res <- as.data.frame(res@listData, row.names = res@rownames)
