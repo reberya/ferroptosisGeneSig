@@ -147,7 +147,7 @@ summary(res)
 summary(hold)
 
 # distribution of p values
-hist(res$pvalue)
+hist(res$pvalue, main = 'GSE104462 p-values')
 
 # convert to data frame
 res <- as.data.frame(res@listData, row.names = res@rownames)
