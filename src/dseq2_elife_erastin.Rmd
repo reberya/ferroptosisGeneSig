@@ -197,6 +197,8 @@ hist(temp$log2FoldChange, breaks = 100)
 
 # genes with lfc > 1
 table(abs(res$log2FoldChange) >= 1)
+table(res$log2FoldChange >= 1)
+table(res$log2FoldChange <= -1)
 
 # the fpkm analysis with fc >2
 fpkm <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.5061_dryad.jp43c__v1/DataPackage1.txt')
