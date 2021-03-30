@@ -114,7 +114,7 @@ counts <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elif
 counts %<>% set_rownames(counts$gene) %>% select(-gene)
 
 # eliminate other samples
-counts %<>% dplyr::select(-bme_1, -bme_2, -erastin_bme_1, -erastin_bme_2)
+counts.sub <- counts %>% dplyr::select(-bme_1, -bme_2, -erastin_bme_1, -erastin_bme_2)
 
 # create coldata
 condition <- factor(c('cntrl','cntrl','erastin','erastin'), 
@@ -123,7 +123,7 @@ coldata <- as.data.frame(condition)
 rownames(coldata) <- c('dmso_1','dmso_2','erastin_1','erastin_2')
 coldata
 
-dds <- DESeqDataSetFromMatrix(countData = counts,
+dds <- DESeqDataSetFromMatrix(countData = counts.sub,
                               colData = coldata,
                               design= ~ condition)
 
