@@ -26,6 +26,7 @@ library('DESeq2')
 library('tximport')
 library('tximportData')
 library('rhdf5')
+library('EnhancedVolcano')
 
 ```
 
@@ -90,7 +91,7 @@ dds <- DESeqDataSetFromTximport(txi.kallisto, sampleTable, ~condition)
 dds <- DESeq(dds)
 ```
 
-## Differential expression analysis of erastin vs control using only erastin/control samples
+## Differential expression analysis of erastin vs control using all available samples
 ```{r}
 
 # get DE
@@ -146,8 +147,31 @@ summary(res)
 # compare vs all samples
 summary(hold)
 
+```
+
+## QC plots
+```{r}
 # distribution of p values
 hist(res$pvalue, main = 'GSE104462 p-values')
+
+# Volcano
+EnhancedVolcano(res,
+                lab = rownames(res),
+                x = 'log2FoldChange',
+                y = 'pvalue')
+
+# MA plot
+## regular lfc
+plotMA(res, ylim=c(-5,5), main = 'MA-plot LFCs')
+## shrunken lfc
+resultsNames(dds)
+resLFC <- lfcShrink(dds, coef="condition_Hepg2_erastin_vs_Hepg2", type="apeglm")
+plotMA(resLFC, ylim=c(-2,2), main = 'MA-plot Shrunken LFCs')
+
+```
+
+## Combine with counts and save
+```{r}
 
 # convert to data frame
 res <- as.data.frame(res@listData, row.names = res@rownames)
@@ -161,9 +185,6 @@ write.table(res_counts, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/
             row.names = T, col.names = T, quote = F, sep = '\t')
 
 ```
-
-
-
 
 
 
