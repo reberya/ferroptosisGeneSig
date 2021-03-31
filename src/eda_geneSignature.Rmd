@@ -115,7 +115,7 @@ erastin %<>% set_rownames(erastin$Row.names) %>%
   select(log2FoldChange.x, padj.x, log2FoldChange.y, padj.y, SRR6122015:SRR6122020, dmso_1:erastin_bme_2)
 colnames(erastin)[1:4] <- c('gme104462_lfc', 'gme104462_padj', 'elife_lfc', 'elife_padj')
 ## ensure change in same way
-erastin %<>% dplyr::filter((elife_lfc > 0 & gme104462_lfc > 0) | (elife_lfc < 0 & gme104462_lfc < 0))
+erastin.sig <- erastin %>% dplyr::filter((elife_lfc > 0 & gme104462_lfc > 0) | (elife_lfc < 0 & gme104462_lfc < 0))
 
 ```
 
@@ -295,7 +295,7 @@ Heatmap(clue.erastin_6h_5um.kras.sub,
 ## Clean the erastin LFCs for plotting
 ```{r}
 
-erastin.plot <- erastin %>%
+erastin.plot <-  %>%
   ## select cols
   dplyr::select(gme104462_lfc, elife_lfc) %>%
   ## keep only genes from the clue dataset
@@ -311,7 +311,7 @@ Very few of them actually represented in the clue dataset.
 
 # filter clue dataset for genes of interest
 clue.erastin_6h_5um.kras.sub <- clue.erastin_6h_5um.kras %>%
-  dplyr::filter(rownames(.) %in% rownames(erastin)) 
+  dplyr::filter(rownames(.) %in% rownames()) 
 
 # make rownames in same order as erastin.plot
 clue.erastin_6h_5um.kras.sub <- clue.erastin_6h_5um.kras.sub[order(match(rownames(clue.erastin_6h_5um.kras.sub),rownames(erastin.plot))),]
@@ -480,70 +480,195 @@ Heatmap(clue.erastin_24h_5um.sub,
         show_heatmap_legend = F)
 ```
 
+# Focus on 24 hour time point to build signature working backwards
 
-
-# CTRP Erastin sensitivity data
-
-## prepare ctrp data
 ```{r}
 
-# load necessary ctrp data
-ctrp <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/CTRPv2.0_2015_ctd2_ExpandedDataset/v20.data.curves_post_qc.txt', data.table = F)
-exp <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/CTRPv2.0_2015_ctd2_ExpandedDataset/v20.meta.per_experiment.txt', data.table = F)
-celltype <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/CTRPv2.0_2015_ctd2_ExpandedDataset/v20.meta.per_cell_line.txt', data.table = F)
+# Reload the 24 hour clue data
+## 10um, 24h
+clue.erastin_24h_10um <- clean_clue(clue.erastin, dose = '10 µM', time = '24 h', see_avail_opts = F)
+## 5um, 24h
+clue.erastin_24h_5um <- clean_clue(clue.erastin, dose = '5 µM', time = '24 h', see_avail_opts = F)
 
-# select erastin
-ctrp %<>% dplyr::filter(master_cpd_id == '63578')
+# merge data frames adding dosage info to colnames
+## 10um
+clue.erastin_24h_10um %<>% set_rownames(clue.erastin_24h_10um$pr_gene_symbol) %>%
+  dplyr::select(-pr_gene_symbol)
+colnames(clue.erastin_24h_10um) <- paste0(colnames(clue.erastin_24h_10um), '_10um')
+## 5um
+clue.erastin_24h_5um %<>% set_rownames(clue.erastin_24h_5um$pr_gene_symbol) %>%
+  dplyr::select(-pr_gene_symbol)
+colnames(clue.erastin_24h_5um) <- paste0(colnames(clue.erastin_24h_5um), '_5um')
+## merge
+clue.erastin_24h <- merge(clue.erastin_24h_5um, clue.erastin_24h_10um, by = 0)
+clue.erastin_24h %<>% set_rownames(clue.erastin_24h$Row.names) %>%
+  dplyr::select(-Row.names)
 
-# Modify so each ec50 has its corresponding cell type
-celltype <- merge(celltype, exp, by = 'master_ccl_id')
-celltype %<>% dplyr::select(experiment_id, ccl_name)
-ctrp <- merge(ctrp, celltype)
-ctrp %<>% unique() 
+# Filter for those changing the same way in at least 10/13
+clue.erastin_24h %<>% 
+  dplyr::mutate(sums = (HA1E_5um > 0) + 
+                  (A375_5um > 0) +
+                  (HT29_5um > 0) +
+                  (MCF7_5um > 0) +
+                  (PC3_5um > 0) +
+                  (A549_5um > 0) +
+                  (HCC515_5um > 0) +
+                  (VCAP_5um > 0) +
+                  (HEPG2_10um > 0) +
+                  (A375_10um > 0) +
+                  (HCC515_10um > 0) +
+                  (A549_10um > 0) +
+                  (HA1E_10um > 0)) %>%
+  dplyr::mutate(upregulated = ifelse(sums >= 8, T, F))
+clue.erastin_24h %<>% dplyr::filter(sums >= 10 | sums <= 3) %>%
+  dplyr::select(-sums)
+
+# Find most significantly changing genes (summation of z scores)
+clue.erastin_24h %<>%
+  mutate(sums = rowSums(abs(clue.erastin_24h[,-14]))) 
+clue.erastin_24h %<>% dplyr::filter(sums >= mean(clue.erastin_24h$sums)) 
+clue.erastin_24h %<>% dplyr::select(-sums)
 
 
 ```
 
-## Add ec50 values to plot
+
+## see how many recapitulate in the good RNA-seq data set
+```{r}
+# GSE104462 (erastin)
+gse104462 <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE104462/deseq2/GSE104462_degs_erastin_control.txt', data.table = F)
+
+gse104462 %<>%
+  set_rownames(gse104462$Row.names) %>%
+  select(log2FoldChange, padj)
+
+# Find genes present in both data sets
+sig_24h <- merge(clue.erastin_24h, gse104462, by = 0)
+
+# Filter for those changing the same way in both
+sig_24h %<>% dplyr::filter((upregulated == T & log2FoldChange > 0) | (upregulated == F & log2FoldChange < 0))
+
+# filter for those significant in the RNA-seq data set
+sig_24h %<>% dplyr::filter(padj < 0.1)
+
+# clean for processing
+sig_24h %<>% set_rownames(sig_24h$Row.names) %>%
+  select(upregulated:padj, HA1E_5um:HA1E_10um)
+colnames(sig_24h)[2:3] <- c('GSE104462_LFC', 'GSE104462_padj')
+sig_24h %<>% dplyr::arrange(GSE104462_LFC)
+
+
+```
+
+## Clean datasets for all plot (again)
+#### Load and merge RNA-seq
 ```{r}
 
-ctrp.clue <- ctrp %>% dplyr::filter(ccl_name %in% colnames(clue.erastin_6h_5um.kras.sub)) %>%
-  dplyr::filter(apparent_ec50_umol <10 & apparent_ec50_umol > 0.001) %>%
-  arrange(-area_under_curve)
-ctrp.clue <- ctrp.clue[!duplicated(ctrp.clue$ccl_name),]
+# elife 
+elife <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elife2014_erastin/rna_seq/elife_degs_erastin_control.txt', data.table = F)
 
-clue.erastin_6h_5um.kras.sub.ctrp <- clue.erastin_6h_5um.kras.sub %>% dplyr::select(ctrp.clue$ccl_name)
+# GSE104462 (erastin)
+gse104462 <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE104462/deseq2/GSE104462_degs_erastin_control.txt', data.table = F)
+
+# GSE162069 (ML162)
+gse162069 <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/GSE162069/deseq2/GSE162069_degs_erastin_control.txt', data.table = F)
+
+
+# merge elife and gse104462
+rna <- merge(gse104462, elife, by = 'Row.names', all.x = T)
+rna %<>% dplyr::select(Row.names, log2FoldChange.x, log2FoldChange.y, padj.x, padj.y)
+colnames(rna) <- c('Row.names', 'GSE104462_LFC', 'elife_LFC' , 'GSE104462_padj', 'padj.elife')
+
+# merge GSE162069
+rna <- merge(rna, gse162069, all.x = T)
+rna %<>% select(Row.names: elife_LFC, log2FoldChange, GSE104462_padj:padj.elife, padj)
+colnames(rna) <- c('Row.names', 'GSE104462_LFC', 'elife_LFC', 'GSE162069_LFC', 'GSE104462_padj', 'elife_padj', 'GSE162069_padj')
+
+# add rownames
+rna %<>% set_rownames(rna$Row.names) %<>% dplyr::select(-Row.names)
+
+
+```
+
+#### Set clue data set row names 
+```{r}
+
+# change gene col to row names
+clue.erastin_6h_5um %<>% set_rownames(clue.erastin_6h_5um$pr_gene_symbol) %>% dplyr::select(-pr_gene_symbol)
+
+# already set for the 24h time points
+
+```
+
+## Select sig_24h genes and order for heatmap
+```{r}
+
+# select genes
+rna.sig_24h <- rna %>% dplyr::filter(rownames(.) %in% rownames(sig_24h))
+clue.erastin_6h_5um.sig_24h <- clue.erastin_6h_5um %>% dplyr::filter(rownames(.) %in% rownames(sig_24h))
+clue.erastin_24h_10um.sig_24h <- clue.erastin_24h_10um %>% dplyr::filter(rownames(.) %in% rownames(sig_24h)) 
+clue.erastin_24h_5um.sig_24h <- clue.erastin_24h_5um %>% dplyr::filter(rownames(.) %in% rownames(sig_24h))
+
+# order
+rna.sig_24h <- rna.sig_24h[order(match(rownames(rna.sig_24h),rownames(sig_24h))),]
+clue.erastin_6h_5um.sig_24h <- clue.erastin_6h_5um.sig_24h[order(match(rownames(clue.erastin_6h_5um.sig_24h),rownames(sig_24h))),]
+clue.erastin_24h_10um.sig_24h <- clue.erastin_24h_10um.sig_24h[order(match(rownames(clue.erastin_24h_10um.sig_24h),rownames(sig_24h))),]
+clue.erastin_24h_5um.sig_24h <- clue.erastin_24h_5um.sig_24h[order(match(rownames(clue.erastin_24h_5um.sig_24h),rownames(sig_24h))),]
+
+
+```
+
+
+
+## Plot gene signature in all data sets
+```{r}
+
+# row split
+up <- table(rna.sig_24h$GSE104462_LFC > 0)[2]
+down <- table(rna.sig_24h$GSE104462_LFC > 0)[1]
 
 set.seed(11)
-Heatmap(erastin.plot,
+Heatmap(rna.sig_24h[,1:3],
         show_column_dend = F,
         show_row_dend = F,
         show_row_names = F,
         column_names_gp = gpar(fontsize = 7),
-        row_km = 2,
         column_title = 'RNA-seq',
-        show_heatmap_legend = F) + 
-
-  Heatmap(gse162069,
-        show_column_dend = F,
-        show_row_dend = F,
-        column_names_gp = gpar(fontsize = 7),
-        show_heatmap_legend = F) + 
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F,
+        row_split = c(rep('down', down), rep('up', up)),
+        na_col = 'black') +
   
-  Heatmap(clue.erastin_6h_5um.kras.sub.ctrp,
+Heatmap(clue.erastin_6h_5um.sig_24h,
         show_column_dend = F,
         show_row_dend = F,
         show_row_names = F,
         row_names_gp = gpar(fontsize = 5),
         column_names_gp = gpar(fontsize = 7),
         column_title = 'Clue-Erastin 5um-6h',
+        column_title_gp = gpar(fontsize = 8),
         show_heatmap_legend = F,
-        top_annotation = HeatmapAnnotation(ec50 = ctrp.clue$apparent_ec50_umol))
-
+        clustering_method_columns = 'complete') +
+  
+Heatmap(clue.erastin_24h_5um.sig_24h,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = '5um-24h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F) +
+  
+  Heatmap(clue.erastin_24h_10um.sig_24h,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = '10um-24h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F)
 
 ```
-
-
 
 
 
