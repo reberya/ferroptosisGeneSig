@@ -482,6 +482,7 @@ Heatmap(clue.erastin_24h_5um.sub,
 
 # Focus on 24 hour time point to build signature working backwards
 
+## Find the genes significant in the 24 hour data set (clue)
 ```{r}
 
 # Reload the 24 hour clue data
@@ -669,6 +670,62 @@ Heatmap(clue.erastin_24h_5um.sig_24h,
         show_heatmap_legend = F)
 
 ```
+
+# PCA plots of the clue data using the signature developed from the cells exposed to erastin for 24 hours
+
+## combine all clue data sets for pca plotting
+```{r}
+
+# combine
+## rename cols for sorting
+colnames(clue.erastin_24h_10um.sig_24h) <- paste0(colnames(clue.erastin_24h_10um.sig_24h), '_24h')
+colnames(clue.erastin_24h_5um.sig_24h) <- paste0(colnames(clue.erastin_24h_5um.sig_24h), '_24h')
+colnames(clue.erastin_6h_5um.sig_24h) <- paste0(colnames(clue.erastin_6h_5um.sig_24h), '_5um_6h')
+## merge
+clue.erastin.pca <- merge(clue.erastin_24h_10um.sig_24h, clue.erastin_24h_5um.sig_24h, by = 0)
+clue.erastin.pca %<>% set_rownames(clue.erastin.pca$Row.names) %>% select(-Row.names)
+clue.erastin.pca <- merge(clue.erastin.pca, clue.erastin_6h_5um.sig_24h, by = 0)
+clue.erastin.pca %<>% set_rownames(clue.erastin.pca$Row.names) %>% select(-Row.names)
+
+# Transpose for plotting and add group info
+clue.erastin.pca %<>% t() %>% as.data.frame()
+clue.erastin.pca %<>% mutate(group = sub('[A-Z0-9]{2,8}\\_', replacement = '', rownames(clue.erastin.pca)))
+
+```
+
+## plot pca of all clue datasets
+#### All cell lines included
+This one has lots of variation among PC1 attributable to those cell lines with high z scores
+```{r}
+
+library(cowplot)
+library(ggfortify)
+
+dat <- clue.erastin.pca
+autoplot(dat %>% select(-group) %>% prcomp(),
+         data = dat,
+         colour = 'group') +
+  theme_cowplot(12)
+
+```
+
+#### Remove boistrous cell lines
+This one has lots of variation among PC1 attributable to those cell lines with high z scores
+```{r}
+
+# eliminating values based on heatmap above
+elim <- c('T3M10_5um_6h_5um_6h', 'CORL23_5um_6h_5um_6h', 'SNU1040_5um_6h_5um_6h', 'CL34_5um_6h_5um_6h', 'NCIH1694_5um_6h_5um_6h')
+
+dat <- clue.erastin.pca %>% filter(!rownames(.) %in% elim)
+autoplot(dat %>% select(-group) %>% prcomp(),
+         data = dat,
+         colour = 'group',
+         x=1,
+         y=2) +
+  theme_cowplot(12)
+
+```
+
 
 
 
