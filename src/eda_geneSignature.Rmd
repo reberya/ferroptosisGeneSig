@@ -797,6 +797,116 @@ Heatmap(clue.erastin_24h_5um.sig_24h,
 
 ```
 
+## save gene signature
+```{r}
+temp <- sig_24h 
+colnames(temp)[4:16] <- paste0(colnames(sig_24h)[4:16], '_24h')
+write.table(temp, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/gene_signatures/erastin_clue24h_gse104462_306genes.txt',
+            row.names = T, col.names = T, sep = '\t', quote = F)
+
+```
+
+
+
+
+
+# Refine gene signature further
+
+## Impose more stringent criteria on the gene signature
+Take genes with fold change > 1.5 in GSE1044462 and genes with large z scores across groups
+```{r}
+
+sig_24h_ref <- sig_24h %>%
+  # GSE104462 fc > 1.5
+  dplyr::filter(abs(GSE104462_LFC) > log2(1.5))
+# calculate abs(sum of z scores)
+sig_24h_ref %<>% mutate(sums = rowSums(sig_24h_ref %>% select(HA1E_5um:HA1E_10um) %>% abs()))
+# filter for genes greater than the median of the sum of the z scores
+sig_24h_ref %<>% filter(sums >= median(sig_24h_ref$sums))
+sig_24h_ref %<>% dplyr::select(-sums)
+
+
+
+```
+
+## Select sig_24h genes and order for heatmap
+```{r}
+
+# select genes
+rna.sig_24h_ref <- rna %>% dplyr::filter(rownames(.) %in% rownames(sig_24h_ref))
+clue.erastin_6h_5um.sig_24h_ref <- clue.erastin_6h_5um %>% dplyr::filter(rownames(.) %in% rownames(sig_24h_ref))
+clue.erastin_24h_10um.sig_24h_ref <- clue.erastin_24h_10um %>% dplyr::filter(rownames(.) %in% rownames(sig_24h_ref)) 
+clue.erastin_24h_5um.sig_24h_ref <- clue.erastin_24h_5um %>% dplyr::filter(rownames(.) %in% rownames(sig_24h_ref))
+
+# order
+rna.sig_24h_ref <- rna.sig_24h_ref[order(match(rownames(rna.sig_24h_ref),rownames(sig_24h_ref))),]
+clue.erastin_6h_5um.sig_24h_ref <- clue.erastin_6h_5um.sig_24h_ref[order(match(rownames(clue.erastin_6h_5um.sig_24h_ref),rownames(sig_24h_ref))),]
+clue.erastin_24h_10um.sig_24h_ref <- clue.erastin_24h_10um.sig_24h_ref[order(match(rownames(clue.erastin_24h_10um.sig_24h_ref),rownames(sig_24h_ref))),]
+clue.erastin_24h_5um.sig_24h_ref <- clue.erastin_24h_5um.sig_24h_ref[order(match(rownames(clue.erastin_24h_5um.sig_24h_ref),rownames(sig_24h_ref))),]
+
+```
+
+
+## Plot gene signature in all data sets
+Ordered based on GSE104462 LogFC
+```{r}
+
+# row split
+up <- table(rna.sig_24h_ref$GSE104462_LFC > 0)[2]
+down <- table(rna.sig_24h_ref$GSE104462_LFC > 0)[1]
+
+set.seed(11)
+Heatmap(rna.sig_24h_ref[,1:3],
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = 'RNA-seq',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F,
+        row_split = c(rep('down', down), rep('up', up)),
+        na_col = 'black',
+        cluster_rows = T) +
+  
+Heatmap(clue.erastin_6h_5um.sig_24h_ref,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_title = 'Clue-Erastin 5um-6h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F,
+        clustering_method_columns = 'complete') +
+  
+Heatmap(clue.erastin_24h_5um.sig_24h_ref,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = '5um-24h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F) +
+  
+  Heatmap(clue.erastin_24h_10um.sig_24h_ref,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = '10um-24h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F)
+
+```
+
+## save gene signature
+```{r}
+temp <- sig_24h_ref 
+colnames(temp)[4:16] <- paste0(colnames(sig_24h)[4:16], '_24h')
+write.table(temp, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/gene_signatures/erastin_clue24h_gse104462_83genes.txt',
+            row.names = T, col.names = T, sep = '\t', quote = F)
+
+```
 
 
 
@@ -822,7 +932,7 @@ clue.erastin.pca %<>% mutate(group = sub('[A-Z0-9]{2,8}\\_', replacement = '', r
 
 ```
 
-## plot pca of all clue datasets
+## plot pca of all clue datasets for 306 gene signature
 #### All cell lines included
 This one has lots of variation among PC1 attributable to those cell lines with high z scores
 ```{r}
@@ -843,9 +953,54 @@ This one has lots of variation among PC1 attributable to those cell lines with h
 ```{r}
 
 # eliminating values based on heatmap above
-elim <- c('T3M10_5um_6h_5um_6h', 'CORL23_5um_6h_5um_6h', 'SNU1040_5um_6h_5um_6h', 'CL34_5um_6h_5um_6h', 'NCIH1694_5um_6h_5um_6h')
+elim <- c('T3M10_5um_6h', 'CORL23_5um_6h', 'SNU1040_5um_6h', 'CL34_5um_6h', 'NCIH1694_5um_6h')
 
 dat <- clue.erastin.pca %>% filter(!rownames(.) %in% elim)
+# PC1/2
+set.seed(11)
+autoplot(dat %>% select(-group) %>% prcomp(),
+         data = dat,
+         colour = 'group',
+         x=1,
+         y=2) +
+  theme_cowplot(12)
+# PC 2/3
+set.seed(11)
+autoplot(dat %>% select(-group) %>% prcomp(),
+         data = dat,
+         colour = 'group',
+         x=2,
+         y=3) +
+  theme_cowplot(12)
+# PC 3/4
+set.seed(11)
+autoplot(dat %>% select(-group) %>% prcomp(),
+         data = dat,
+         colour = 'group',
+         x=3,
+         y=4) +
+  theme_cowplot(12)
+# PC 5/6
+set.seed(11)
+autoplot(dat %>% select(-group) %>% prcomp(),
+         data = dat,
+         colour = 'group',
+         x=5,
+         y=6) +
+  theme_cowplot(12)
+
+```
+
+## Look at PCA plots of 86 gene signature
+Post-removal of boistrous cell lines
+```{r}
+
+dat <- clue.erastin.pca %>% filter(!rownames(.) %in% elim)
+dat %<>% select(group, rownames(sig_24h_ref))
+
+
+# PC1/2
+set.seed(11)
 autoplot(dat %>% select(-group) %>% prcomp(),
          data = dat,
          colour = 'group',
@@ -854,9 +1009,6 @@ autoplot(dat %>% select(-group) %>% prcomp(),
   theme_cowplot(12)
 
 ```
-
-
-
 
 
 
