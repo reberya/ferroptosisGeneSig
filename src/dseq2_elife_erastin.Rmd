@@ -21,6 +21,7 @@ library('tidyverse')
 library('magrittr')
 
 library(DESeq2)
+library('EnhancedVolcano')
 
 ```
 
@@ -140,14 +141,39 @@ dds <- DESeq(dds)
 res <- results(dds, contrast=c("condition","erastin","cntrl"))
 summary(res)
 
+```
+
+## QC plots
+```{r}
+
 # distribution of p values
 hist(res$pvalue, main = 'Elife-erastin p-values')
+
+# Volcano
+EnhancedVolcano(res,
+                lab = rownames(res),
+                x = 'log2FoldChange',
+                y = 'pvalue')
+
+# MA plot
+## regular lfc
+plotMA(res, ylim=c(-5,5), main = 'MA-plot LFCs')
+## shrunken lfc
+resultsNames(dds)
+resLFC <- lfcShrink(dds, coef="condition_erastin_vs_cntrl", type="apeglm")
+plotMA(resLFC, ylim=c(-2,2), main = 'MA-plot Shrunken LFCs')
+
+```
+
+## Modify results format for future use
+```{r}
 
 # convert to data frame and save for comparison
 res <- as.data.frame(res@listData, row.names = res@rownames)
 hold_model_cntEras <- res
 
 ```
+
 
 ### Performance of using only erastin/control samples in model to compare erastin vs control
 It appears that they both capture 15 genes reported to be associated with ferroptosis, however the 
