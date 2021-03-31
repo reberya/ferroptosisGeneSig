@@ -378,6 +378,13 @@
       "Repository": "CRAN",
       "Hash": "abea3384649ef37f60ef51ce002f3547"
     },
+    "cowplot": {
+      "Package": "cowplot",
+      "Version": "1.1.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "b418e8423699d11c7f2087c2bfd07da2"
+    },
     "cpp11": {
       "Package": "cpp11",
       "Version": "0.2.6",
@@ -522,6 +529,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "4d243a9c10b00589889fe32314ffd902"
+    },
+    "ggfortify": {
+      "Package": "ggfortify",
+      "Version": "0.4.11",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "16fde1490c7a356c847ee561b96b6572"
     },
     "ggplot2": {
       "Package": "ggplot2",

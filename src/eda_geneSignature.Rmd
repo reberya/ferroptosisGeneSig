@@ -295,7 +295,7 @@ Heatmap(clue.erastin_6h_5um.kras.sub,
 ## Clean the erastin LFCs for plotting
 ```{r}
 
-erastin.plot <-  %>%
+erastin.plot <- erastin.sig %>%
   ## select cols
   dplyr::select(gme104462_lfc, elife_lfc) %>%
   ## keep only genes from the clue dataset
