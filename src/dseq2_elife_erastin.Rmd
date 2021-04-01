@@ -20,8 +20,10 @@ library('data.table')
 library('tidyverse')
 library('magrittr')
 
-library(DESeq2)
+library('DESeq2')
 library('EnhancedVolcano')
+library('cowplot')
+library('ggfortify')
 
 ```
 
@@ -35,7 +37,7 @@ counts <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elif
 
 # modify counts for deseq input
 ## rownames
-counts %<>% set_rownames(counts$gene) %>% select(-gene)
+counts %<>% set_rownames(counts$gene) %>% dplyr::select(-gene)
 
 # create coldata
 condition <- factor(c('cntrl','cntrl','bme','bme','erastin','erastin','erastin_bme','erastin_bme'), 
@@ -112,7 +114,7 @@ counts <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/int/elif
 
 # modify counts for deseq input
 ## rownames
-counts %<>% set_rownames(counts$gene) %>% select(-gene)
+counts %<>% set_rownames(counts$gene) %>% dplyr::select(-gene)
 
 # eliminate other samples
 counts.sub <- counts %>% dplyr::select(-bme_1, -bme_2, -erastin_bme_1, -erastin_bme_2)
@@ -162,6 +164,16 @@ plotMA(res, ylim=c(-5,5), main = 'MA-plot LFCs')
 resultsNames(dds)
 resLFC <- lfcShrink(dds, coef="condition_erastin_vs_cntrl", type="apeglm")
 plotMA(resLFC, ylim=c(-2,2), main = 'MA-plot Shrunken LFCs')
+
+# PCA
+dat <- as.data.frame(t(counts))
+dat$group <- rep(c("cntrl", 'bme', "erastin", 'bme_erastin'), each = 2)
+dat$sample <- rownames(dat)
+autoplot(dat %>% dplyr::select(-group, -sample) %>% prcomp(),
+         data = dat,
+         colour = 'group',
+         size = 6) +
+  theme_cowplot(12)
 
 ```
 

@@ -16,7 +16,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r, warning=F, message=FALSE}
 
 library('plyr')
-library('dplyr') # interferes with biomart
+library('dplyr') 
 library('stringr')
 library('data.table')
 library('tidyverse')
@@ -27,6 +27,8 @@ library('tximport')
 library('tximportData')
 library('rhdf5')
 library('EnhancedVolcano')
+library('cowplot')
+library('ggfortify')
 
 ```
 
@@ -77,15 +79,15 @@ files <- paste0(dir, files)
 names(files) <- list.files(dir)
 
 # import at gene level
-txi.kallisto <- tximport(files, type = "kallisto", tx2gene = tx2gene)
-head(txi.kallisto$counts)
+txi.kallisto.all <- tximport(files, type = "kallisto", tx2gene = tx2gene)
+head(txi.kallisto.all$counts)
 
 # create sample table for import from tximport
 sampleTable <- data.frame(condition = factor(rep(c("Hepg2", "Hepg2_erastin", "Hepg2_ferrostatin"), each = 3)))
-rownames(sampleTable) <- colnames(txi.kallisto$counts)
+rownames(sampleTable) <- colnames(txi.kallisto.all$counts)
 
 # import into DESeq2
-dds <- DESeqDataSetFromTximport(txi.kallisto, sampleTable, ~condition)
+dds <- DESeqDataSetFromTximport(txi.kallisto.all, sampleTable, ~condition)
 
 # Run DESeq2
 dds <- DESeq(dds)
@@ -167,6 +169,16 @@ plotMA(res, ylim=c(-5,5), main = 'MA-plot LFCs')
 resultsNames(dds)
 resLFC <- lfcShrink(dds, coef="condition_Hepg2_erastin_vs_Hepg2", type="apeglm")
 plotMA(resLFC, ylim=c(-2,2), main = 'MA-plot Shrunken LFCs')
+
+# PCA
+dat <- as.data.frame(t(txi.kallisto.all$counts))
+dat$group <- rep(c("Hepg2", "Hepg2_erastin", 'Ferrostatin-1'), each = 3)
+dat$sample <- rownames(dat)
+autoplot(dat %>% dplyr::select(-group, -sample) %>% prcomp(),
+         data = dat,
+         colour = 'group',
+         size = 6) +
+  theme_cowplot(12)
 
 ```
 
