@@ -1168,7 +1168,48 @@ write.table(temp, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/ge
 
 ```
 
+# GO analysis
 
+```{r}
+
+library('GOstats')
+remove.packages('GO.db')
+library("biomaRt")
+
+
+
+# Convert common names to entrez gene IDs
+ensembl <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
+temp <- getBM(attributes=c('external_gene_name', 'entrezgene_id'),
+                    filters = 'chromosome_name',
+                    values = c(1:22, 'X', 'Y'),
+                    mart = ensembl,
+                    useCache = F)
+
+# gene universe
+universe <- merge(clue.erastin, temp, by.x = 'pr_gene_symbol', by.y='external_gene_name')
+universe <- unique(unlist(universe$entrezgene_id))
+
+sig_24h.entrez <- merge(sig_24h, temp, by.x = 0, by.y='external_gene_name')
+
+
+params <- new('GOHyperGParams',
+              geneIds = sig_24h.entrez$entrezgene_id,
+              universeGeneIds = universe,
+              ontology = 'BP',
+              pvalueCutoff = 0.001,
+              conditional = FALSE,
+              testDirection = 'over',
+              annotation = "org.Hs.eg.db"
+             )
+
+hgOver <- hyperGTest(params)
+result <- summary(hgOver)
+
+
+
+
+```
 
 
 
