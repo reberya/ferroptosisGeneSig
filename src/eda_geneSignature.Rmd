@@ -1147,6 +1147,19 @@ Heatmap(clue.erastin_24h_5um.rna.cor,
 
 ```
 
+## See how captures genes reported in elife
+Captures 21/37 genes
+```{r}
+topGenes <- c('CHAC1', 'DDIT4', 'LOC284561', 'ASNS', 'TSC22D3', 'DDIT3', 'JDP2', 'SESN2',
+              'SLC1A4', 'PCK2', 'SLC7A11', 'TXNIP', 'VLDLR', 'GPT2', 'PSAT1', 'C9ORF150',
+              'SLC7A5', 'HERPUD1', 'XBP1', 'ATF3', 'SLC3A2', 'CBS', 'ATF4', 'ZNF419', 
+              'KLHL24', 'TRIB3', 'ZNF643', 'ATP6V1G2', 'VEGFA', 'GDF15', 'TUBE1', 
+              'ARRDC3', 'CEBPG', 'SNORA16A', 'RGS4', 'MUTED-TXNDC5', 'LOC390705')
+
+table(topGenes %in% rownames(rna.cor))
+
+```
+
 ## save gene signature
 ```{r}
 temp <- rna.cor 
