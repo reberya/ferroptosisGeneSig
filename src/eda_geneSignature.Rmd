@@ -813,19 +813,12 @@ write.table(temp, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/ge
 # Refine gene signature further
 
 ## Impose more stringent criteria on the gene signature
-Take genes with fold change > 1.5 in GSE1044462 and genes with large z scores across groups
+Take genes with fold change > 2 in GSE1044462 
 ```{r}
 
 sig_24h_ref <- sig_24h %>%
   # GSE104462 fc > 1.5
-  dplyr::filter(abs(GSE104462_LFC) > log2(1.5))
-# calculate abs(sum of z scores)
-sig_24h_ref %<>% mutate(sums = rowSums(sig_24h_ref %>% select(HA1E_5um:HA1E_10um) %>% abs()))
-# filter for genes greater than the median of the sum of the z scores
-sig_24h_ref %<>% filter(sums >= median(sig_24h_ref$sums))
-sig_24h_ref %<>% dplyr::select(-sums)
-
-
+  dplyr::filter(abs(GSE104462_LFC) > log2(2))
 
 ```
 
@@ -891,7 +884,8 @@ Heatmap(clue.erastin_24h_5um.sig_24h_ref,
   Heatmap(clue.erastin_24h_10um.sig_24h_ref,
         show_column_dend = F,
         show_row_dend = F,
-        show_row_names = F,
+        show_row_names = T,
+        row_names_gp = gpar(fontsize=3),
         column_names_gp = gpar(fontsize = 7),
         column_title = '10um-24h',
         column_title_gp = gpar(fontsize = 8),
@@ -903,7 +897,7 @@ Heatmap(clue.erastin_24h_5um.sig_24h_ref,
 ```{r}
 temp <- sig_24h_ref 
 colnames(temp)[4:16] <- paste0(colnames(sig_24h)[4:16], '_24h')
-write.table(temp, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/gene_signatures/erastin_clue24h_gse104462_83genes.txt',
+write.table(temp, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/gene_signatures/erastin_clue24h_gse104462_70genes.txt',
             row.names = T, col.names = T, sep = '\t', quote = F)
 
 ```
