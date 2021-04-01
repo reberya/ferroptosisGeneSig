@@ -1147,7 +1147,13 @@ Heatmap(clue.erastin_24h_5um.rna.cor,
 
 ```
 
+## save gene signature
+```{r}
+temp <- rna.cor 
+write.table(temp, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/gene_signatures/erastin_elife_correlation_gse104462_96genes.txt',
+            row.names = T, col.names = T, sep = '\t', quote = F)
 
+```
 
 
 
