@@ -1,0 +1,102 @@
+---
+title: "eda_nbl_cohort"
+author: "Ryan Rebernick"
+date: "4/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Description:
+
+
+# Load packages
+```{r, warning=F, message=FALSE}
+
+library('plyr')
+library('dplyr')
+library('stringr')
+library('data.table')
+library('tidyverse')
+library('magrittr')
+
+```
+
+
+# Load NBL cohort data
+17 duplicate gene names are present. These are just removed. If they are needed for any of the gene signatures they can be added to the dataset later. 
+```{r}
+
+# Load RNA-seq counts
+nbl <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/nbl_cohort/release/ForRyan/nbl_expression-cts.csv', data.table = F)
+
+# Remove any duplicate gene_ids so can transpose matrix
+## View duplicate common gene_ids
+duplicates <- nbl$gene_name[nbl$gene_name %>% duplicated()]
+## remove duplicates
+nbl %<>% dplyr::filter(!gene_name %in% duplicates)
+
+# reformat the RNA-seq counts for merging with the clinical data
+nbl %<>% set_rownames(nbl$gene_name) %>%
+  dplyr::select(-gene_name, -gene_id) %>%
+  t() %>%
+  as.data.frame()
+
+# Load the clinical data
+temp <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/nbl_cohort/release/ForRyan/20210403_ForRyan_2021_0403_nbl_rnaseq.txt', data.table = F)
+
+# Merge dataframes for downstream use
+nbl <- merge(temp, nbl, by.x = 'rlib', by.y = 0)
+
+
+```
+
+
+# Analyze gene signatures
+## Create a function to return a boxplot of gene signature z scores by defined group
+```{r}
+
+geneList <- c(colnames(nbl)[444:490], 'NOTAGENE')
+grouping = 'group'
+
+gs_boxplot <- function(geneList, metacols = 1:28, grouping){
+  
+  # create temp dataframe
+  cnts <- nbl
+  
+  # return genes not in provided gene list and remove from query
+  print(paste0('Genes not in count matrix: ', geneList[!geneList %in% colnames(cnts)]))
+  geneList <- geneList[geneList %in% colnames(cnts)]
+  
+  # select genes and metadata
+  cnts %<>% dplyr::select(metacols, all_of(geneList))
+  
+  # Calcluate z scores 
+  temp <- apply(cnts %>% dplyr::select(-metacols), 2, scale)
+  temp$sum <- rowSums(temp)
+  cnts$zsum <- temp$sums
+
+  https://bioconductor.org/packages/devel/bioc/vignettes/singscore/inst/doc/singscore.html#21_Sample_scoring
+  
+  # Boxplot by group of interest
+  
+  cnts %>% 
+    group_by(grouping) %>%
+    dplyr::select(-me)
+    boxplot()
+  
+    
+}
+
+
+```
+
+
+
+
+
+
+
