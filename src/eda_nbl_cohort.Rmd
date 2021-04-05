@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, fig.keep = 'all')
 ```
 
 
@@ -25,6 +25,12 @@ library('magrittr')
 
 #BiocManager::install("singscore")
 library('singscore')
+install.packages("ggpubr")
+library('ggpubr')
+library('ggfortify')
+library('cowplot')
+
+
 
 ```
 
@@ -59,21 +65,46 @@ nbl <- merge(temp, nbl, by.x = 'rlib', by.y = 0)
 ```
 
 ## Select samples needed
+Filtered for samples based on the following criteria:
+- RNA capture method of 'capt'; ensured uniform RNA capture method
+- Nonzero purity scores
+- For rebiopsies of patient, took the sample with the higher purity w/in a timepoint (i.e. dxprim, dx2prim, ect)
+- Eliminated samples which didn't fit the HR/LR/IR criteria (1 sample)
 ```{r}
 
+# Filter for desired samples
+nbl %<>% 
+  ## Filter for the 'capt' RNA capture method
+  dplyr::filter(r.capture == 'capt') %>%
+  ## filter for nonzero purity of RNA
+  dplyr::filter(purity > 0) %>%
+  ## Combine timepoint refrel and relapse variables
+  dplyr::mutate(timepoint = ifelse(timepoint %in% c('refrel', 'relapse'), 'rel_ref', timepoint)) %>%
+  ## Generalize the timepoint variables
+  dplyr::mutate(genTime = ifelse(timepoint %in% c('dxprim', 'dx2prim', 'dxmet'), 'dx', timepoint)) %>%
+  ## Arrange by RNA purity for duplicate removal
+  dplyr::arrange(timepoint, -purity) %>%
+  ## Create pseudo variable for duplicate removal (ex. PO_3133)
+  dplyr::mutate(pt.time = paste0(patient, '.', timepoint))
+## show duplicates
+nbl$patient[duplicated(nbl$pt.time)]
+## remove duplicates based on purity, keeping highest purity
+nbl <- nbl[!duplicated(nbl$pt.time),]
+## Ensure samples represent only risk rated groups
+nbl %<>% dplyr::filter(group %in% c('HR', 'IR', 'LR'))
 
-nbl %<>% dplyr::filter(r.capture == 'capt')
+# Create comparison variable for future use
+nbl$comp <- ifelse(nbl$group %in% c('IR', "LR"), 'IR/LR', 'HR')
 
-
-
-
-
+# Order dataframe cols
+nbl %<>% dplyr::select(rlib:MYCN.cycle, comp, genTime, ARF5:AC106791.3)
 
 
 ```
 
 
 # Analyze gene signatures
+
 ## Create a function to return a signature scores using 3 methods:
 1) Sample scoring package - less dependence of score on other samples
 https://bioconductor.org/packages/devel/bioc/vignettes/singscore/inst/doc/singscore.html#21_Sample_scoring
@@ -88,10 +119,10 @@ https://bioconductor.org/packages/devel/bioc/vignettes/singscore/inst/doc/singsc
 # downGenes - list of genes downregulated in gene signature
 # metacols - the columns of metadata within nbl_df
 
-calculate_signature_scores <- function(nbl_df, upGenes, downGenes, metacols = 1:28){
+calculate_signature_scores <- function(nbl_df, upGenes, downGenes, metacols = 1:30){
   
   # create temp dataframe
-  cnts <- nbl_df %>% set_rownames(paste0('Sample_', 1:length(cnts$rlib)))
+  cnts <- nbl_df %>% set_rownames(paste0('Sample_', 1:length(nbl_df$rlib)))
   
   # return genes not in provided gene list and remove from query
   print(paste0('Up genes not in count matrix: ', upGenes[!upGenes %in% colnames(cnts)]))
@@ -110,7 +141,7 @@ calculate_signature_scores <- function(nbl_df, upGenes, downGenes, metacols = 1:
   
   
   # Calcluate nondirectional z scores 
-  temp <- apply(cnts %>% dplyr::select(all_of(upGenes), all_of(downGenes)), 2, scale)
+  temp <- apply(cnts[,c(upGenes, downGenes)], 2, scale)
   temp$nondirectional_Zsum <- rowSums(abs(temp))
   ## Add Z score to dataframe 
   cnts$nondirectional_Zsum <- temp$nondirectional_Zsum
@@ -140,19 +171,111 @@ calculate_signature_scores <- function(nbl_df, upGenes, downGenes, metacols = 1:
   
 }
 
-# Test
-temp <- calculate_signature_scores(nbl_df = nbl, 
-                                   upGenes = colnames(nbl)[555:577],
-                                   downGenes = colnames(nbl)[655:667], 
-                                   metacols = 1:28)
-
-
 ```
 
-
+## Function to plot comparisons of interest
 ```{r}
 
+make_plots <- function(UPGENES, DOWNGENES, comp='comp', TIMEPOINT){
+  
+  ####################
+  # PCA PLOT by group
+  ####################
+  set.seed(11)
+  dat <- nbl[, c('group', UPGENES, DOWNGENES)]
+  a <- autoplot(dat %>% dplyr::select(-group) %>% prcomp(),
+           data = dat,
+           colour = 'group') +
+    theme_cowplot(12)
+  
+  
+  ####################
+  # Calclulate scores
+  ####################
+  scores <- calculate_signature_scores(nbl_df = nbl, 
+                                   upGenes = UPGENES,
+                                   downGenes = DOWNGENES)
+  
+  ####################
+  # Boxplot 
+  ####################
+
+  # select samples
+  scores %<>% dplyr::filter(timepoint %in% c(TIMEPOINT))
+  
+  # Plot 
+  b1 <- scores %>% ggplot(aes(x=comp, y=ss.TotalScore)) + 
+    geom_boxplot() +
+    geom_jitter(alpha=0.6, width=0.15) +
+    theme_bw(base_size=16) +
+    labs(subtitle="SingScore by Risk group in dxprim") +
+    stat_compare_means(method = "wilcox.test")
+  
+  # Plot 
+  b2 <- scores %>% ggplot(aes(x=comp, y=nondirectional_Zsum)) + 
+    geom_boxplot() +
+    geom_jitter(alpha=0.6, width=0.15) +
+    theme_bw(base_size=16) +
+    labs(subtitle="Nondirectional Z score by Risk group in dxprim") +
+    stat_compare_means(method = "wilcox.test")
+  
+  # Plot 
+  b3 <- scores %>% ggplot(aes(x=comp, y=directional_Zsum)) +
+    geom_boxplot() +
+    geom_jitter(alpha=0.6, width=0.15) +
+    theme_bw(base_size=16) +
+    labs(subtitle="Directional Z score by Risk group in dxprim") +
+    stat_compare_means(method = "wilcox.test")
+  
+  return(list(a,b1,b2,b3))
+  
+}
+
 ```
+
+## 306 gene signature
+
+### Load gene signature
+```{r}
+sig306 <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/gene_signatures/erastin_clue24h_gse104462_306genes.txt',
+                data.table = F)
+
+# Upregulated
+sig306_up <- sig306 %>% 
+  dplyr::filter(upregulated == T) %>% 
+  dplyr::select(V1) %>% unlist()
+
+# Downregulated
+sig306_dn <- sig306 %>% 
+  dplyr::filter(upregulated == F) %>% 
+  dplyr::select(V1) %>% unlist()
+
+
+```
+
+### Plot gene signature in boxplots/pca
+```{r}
+
+# Define comparison
+nbl$comp <- ifelse(nbl$group %in% c('IR', "LR"), 'IR/LR', 'HR')
+
+# plot PCA and boxplots
+make_plots(UPGENES = sig306_up, DOWNGENES = sig306_dn, comp = 'comp', TIMEPOINT = 'dxprim')
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
