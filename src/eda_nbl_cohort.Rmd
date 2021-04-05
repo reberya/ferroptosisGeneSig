@@ -23,10 +23,14 @@ library('data.table')
 library('tidyverse')
 library('magrittr')
 
+#BiocManager::install("singscore")
+library('singscore')
+
 ```
 
 
-# Load NBL cohort data
+# Load NBL cohort data and select samples for analysis
+## Load NBL counts data and merge with metadata
 17 duplicate gene names are present. These are just removed. If they are needed for any of the gene signatures they can be added to the dataset later. 
 ```{r}
 
@@ -54,47 +58,101 @@ nbl <- merge(temp, nbl, by.x = 'rlib', by.y = 0)
 
 ```
 
-
-# Analyze gene signatures
-## Create a function to return a boxplot of gene signature z scores by defined group
+## Select samples needed
 ```{r}
 
-geneList <- c(colnames(nbl)[444:490], 'NOTAGENE')
-grouping = 'group'
 
-gs_boxplot <- function(geneList, metacols = 1:28, grouping){
-  
-  # create temp dataframe
-  cnts <- nbl
-  
-  # return genes not in provided gene list and remove from query
-  print(paste0('Genes not in count matrix: ', geneList[!geneList %in% colnames(cnts)]))
-  geneList <- geneList[geneList %in% colnames(cnts)]
-  
-  # select genes and metadata
-  cnts %<>% dplyr::select(metacols, all_of(geneList))
-  
-  # Calcluate z scores 
-  temp <- apply(cnts %>% dplyr::select(-metacols), 2, scale)
-  temp$sum <- rowSums(temp)
-  cnts$zsum <- temp$sums
+nbl %<>% dplyr::filter(r.capture == 'capt')
 
-  https://bioconductor.org/packages/devel/bioc/vignettes/singscore/inst/doc/singscore.html#21_Sample_scoring
-  
-  # Boxplot by group of interest
-  
-  cnts %>% 
-    group_by(grouping) %>%
-    dplyr::select(-me)
-    boxplot()
-  
-    
-}
+
+
+
+
 
 
 ```
 
 
+# Analyze gene signatures
+## Create a function to return a signature scores using 3 methods:
+1) Sample scoring package - less dependence of score on other samples
+https://bioconductor.org/packages/devel/bioc/vignettes/singscore/inst/doc/singscore.html#21_Sample_scoring
+2) Nondirectional Summation of Z scores
+- Sum the absolute values of Z scores across up and downregulated genes
+3) Directional Summation of Z scores
+- Sum z scores of upregulated genes + -1*(Sum of Z scores of downregulated genes)
+```{r}
+
+# nbl_df - the cleaned nbl dataframe from above
+# upGenes - list of genes upregulated in gene signature
+# downGenes - list of genes downregulated in gene signature
+# metacols - the columns of metadata within nbl_df
+
+calculate_signature_scores <- function(nbl_df, upGenes, downGenes, metacols = 1:28){
+  
+  # create temp dataframe
+  cnts <- nbl_df %>% set_rownames(paste0('Sample_', 1:length(cnts$rlib)))
+  
+  # return genes not in provided gene list and remove from query
+  print(paste0('Up genes not in count matrix: ', upGenes[!upGenes %in% colnames(cnts)]))
+  print(paste0('Down genes not in count matrix: ', downGenes[!downGenes %in% colnames(cnts)]))
+  upGenes <- upGenes[upGenes %in% colnames(cnts)]
+  downGenes <- downGenes[downGenes %in% colnames(cnts)]
+  
+  
+  # Score samples using singScore and merge
+  ## score
+  rankData <- cnts %>% dplyr::select(-metacols) %>%  t() %>% rankGenes()
+  scoredf <- simpleScore(rankData, upSet = upGenes, downSet = downGenes)
+  colnames(scoredf) <- paste0('ss.', colnames(scoredf))
+  ## merge SingScore Total score with tmp df
+  cnts <- merge(cnts, scoredf, by = 0)
+  
+  
+  # Calcluate nondirectional z scores 
+  temp <- apply(cnts %>% dplyr::select(all_of(upGenes), all_of(downGenes)), 2, scale)
+  temp$nondirectional_Zsum <- rowSums(abs(temp))
+  ## Add Z score to dataframe 
+  cnts$nondirectional_Zsum <- temp$nondirectional_Zsum
+  
+  
+  # Calculate directional Z scores
+  ## Upregulated genes
+  temp <- apply(cnts %>% dplyr::select(all_of(upGenes)), 2, scale)
+  temp$upZsum <- rowSums(temp)
+  ## Add Z score to dataframe 
+  cnts$upZsum <- temp$upZsum
+  ## Downregulated genes
+  temp <- apply(cnts %>% dplyr::select(all_of(downGenes)), 2, scale)
+  temp$downZsum <- rowSums(temp)
+  ## Add Z score to dataframe 
+  cnts$downZsum <- temp$downZsum
+  
+  
+  # Select columns
+  cnts %<>% dplyr::select(metacols, ss.TotalScore:ss.DownDispersion, nondirectional_Zsum, upZsum, downZsum)
+  cnts %<>% mutate(directional_Zsum = upZsum + (downZsum * -1)) %>%
+    dplyr::select(-Row.names)
+  
+  # Return
+  return(cnts)
+  
+  
+}
+
+# Test
+temp <- calculate_signature_scores(nbl_df = nbl, 
+                                   upGenes = colnames(nbl)[555:577],
+                                   downGenes = colnames(nbl)[655:667], 
+                                   metacols = 1:28)
+
+
+```
+
+
+```{r}
+
+```
 
 
 
