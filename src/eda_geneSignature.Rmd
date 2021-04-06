@@ -7,6 +7,10 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+# This parameter is needed for installation of org.Hs.eg.db
+Sys.setenv(R_INSTALL_STAGED = FALSE)
+
 ```
 
 
@@ -1047,7 +1051,7 @@ table(topGenes %in% rownames(rna.cor))
 
 ## save gene signature
 ```{r}
-temp <- rna.cor 
+temp <- rna.rna.cor 
 write.table(temp, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/gene_signatures/erastin_elife_correlation_gse104462_96genes.txt',
             row.names = T, col.names = T, sep = '\t', quote = F)
 
@@ -1174,57 +1178,167 @@ autoplot(dat %>% dplyr::select(-group) %>% prcomp(),
 
 
 
-
-
-
-
-
 # GO analysis of gene signatures
 
+
+## Prepare resources for GO analysis 
+
+### Prepare background list and get entrez gene ids
 ```{r}
 
+# BiocManager::install("GOstats", dependencies = TRUE, INSTALL_opts = '--no-lock')
 library('GOstats')
-remove.packages('GO.db')
+#BiocManager::install("biomaRt")
 library("biomaRt")
-
-
+#BiocManager::install("org.Hs.eg.db")
+library('org.Hs.eg.db')
 
 # Convert common names to entrez gene IDs
 ensembl <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
-temp <- getBM(attributes=c('external_gene_name', 'entrezgene_id'),
+key <- getBM(attributes=c('external_gene_name', 'entrezgene_id'),
                     filters = 'chromosome_name',
                     values = c(1:22, 'X', 'Y'),
                     mart = ensembl,
                     useCache = F)
 
-# gene universe
-universe <- merge(clue.erastin, temp, by.x = 'pr_gene_symbol', by.y='external_gene_name')
+# get gene universe
+universe <- merge(clue.erastin, key, by.x = 'pr_gene_symbol', by.y='external_gene_name')
 universe <- unique(unlist(universe$entrezgene_id))
-
-sig_24h.entrez <- merge(sig_24h, temp, by.x = 0, by.y='external_gene_name')
-
-
-params <- new('GOHyperGParams',
-              geneIds = sig_24h.entrez$entrezgene_id,
-              universeGeneIds = universe,
-              ontology = 'BP',
-              pvalueCutoff = 0.001,
-              conditional = FALSE,
-              testDirection = 'over',
-              annotation = "org.Hs.eg.db"
-             )
-
-hgOver <- hyperGTest(params)
-result <- summary(hgOver)
-
-
 
 
 ```
 
+### Function to get and plot GO analysis
+```{r}
 
+go_analysis <- function(genes, universe, pcut = 1e-5, sig_name = 'XX gene signature'){
+  
+  ##################
+  # Over-represented
+  ##################
+  
+  # parameters for GO analysis
+  params <- new('GOHyperGParams',
+              geneIds = genes,
+              universeGeneIds = universe,
+              ontology = 'BP',
+              pvalueCutoff = pcut,
+              conditional = FALSE,
+              testDirection = 'over',
+              annotation = "org.Hs.eg.db"
+             )
+  
+  # Run GO analysis
+  over <- hyperGTest(params)
+  
+  # get -log10 pvalues for plotting 
+  over <- summary(over)
+  over$negLogP<- -1*log10(over$Pvalue)
+  
+  # factor Term so orders by pvalue
+  over %<>% mutate(Term = factor(Term, levels = over$Term))
+  
+  # Over plot
+  over.plot <- ggplot(over, aes(x = Term, y = negLogP)) +
+    geom_col(fill = 'red') +
+    theme_cowplot(12) +
+    coord_flip() + 
+    ggtitle(paste0('Over-enrichment: ', sig_name)) +
+    xlab(NULL) + 
+    ylab("-log10(pval)")
+  
+  ##################
+  # Under-represented
+  ##################
+  
+  params <- new('GOHyperGParams',
+              geneIds = genes,
+              universeGeneIds = universe,
+              ontology = 'BP',
+              pvalueCutoff = pcut,
+              conditional = FALSE,
+              testDirection = 'under',
+              annotation = "org.Hs.eg.db"
+             )
+  
+  # Run GO analysis
+  under <- hyperGTest(params)
+  
+  # get -log10 pvalues for plotting 
+  under <- summary(under)
+  under$negLogP<- -1*log10(under$Pvalue)
+  
+  # factor Term so orders by pvalue
+  under %<>% mutate(Term = factor(Term, levels = under$Term))
+  
+  # Under plot
+  under.plot <- ggplot(under, aes(x = Term, y = negLogP)) +
+    geom_col(fill = 'steelblue') +
+    theme_cowplot(12) +
+    coord_flip() +
+    ggtitle(paste0('Under-enrichment: ', sig_name)) +
+    xlab(NULL) + 
+    ylab("-log10(pval)")
+  
+  return(list(over.plot, under.plot))
+  
+  
+}
 
+```
 
+## Conduct GO analyses
+
+### GO analysis of 24 hour signature (306 genes)
+292 of 306 genes able to be converted to entrez
+```{r, fig.height= 3, fig.width=6}
+
+# get entrez ids for sig_24h
+temp <- merge(sig_24h, key, by.x = 0, by.y='external_gene_name')
+
+# perform GO enrichment
+go_analysis(genes = temp$entrezgene_id, universe = universe, sig_name = '306 gene')
+
+```
+
+### GO analysis of 24 hour signature subset (63 genes)
+59 of 63 genes able to be converted to entrez
+```{r, fig.height= 3, fig.width=6}
+
+# get entrez ids for sig_24h
+temp <- merge(sig_24h_sub, key, by.x = 0, by.y='external_gene_name')
+print(length(temp$Row.names))
+
+# perform GO enrichment
+go_analysis(genes = temp$entrezgene_id, universe = universe, sig_name = '63 gene')
+
+```
+
+### GO analysis of 24 hour signature subset of only the L1000 genes (46 genes)
+44 of 46 genes able to be converted to entrez
+```{r, fig.height= 3, fig.width=6}
+
+# get entrez ids for sig_24h
+temp <- merge(sig_l1000, key, by.x = 0, by.y='external_gene_name')
+print(length(temp$Row.names))
+
+# perform GO enrichment
+go_analysis(genes = temp$entrezgene_id, universe = universe, sig_name = '43 gene')
+
+```
+
+### GO analysis of RNA-seq based signature obtained by correlation (96 genes)
+96 of 96 genes able to be converted to entrez
+```{r, fig.height= 3, fig.width=6}
+
+# get entrez ids for sig_24h
+temp <- merge(rna.rna.cor, key, by.x = 0, by.y='external_gene_name')
+print(length(temp$Row.names))
+
+# perform GO enrichment
+go_analysis(genes = temp$entrezgene_id, universe = universe, sig_name = '96 gene')
+
+```
 
 
 
