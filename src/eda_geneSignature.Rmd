@@ -11,7 +11,13 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 # Description:
+This script creates gene signatures for ferroptosis/erastin exposure using several publically available datasets including: 
+1) Pharmacological inhibition of cystine-glutamate exchange induces endoplasmic reticulum stress and ferroptosis. doi: 10.7554/eLife.02523.
+2) Ferroptotic cell death triggered by conjugated linolenic acids is mediated by ACSL1. (GSE162069)
+3) Ferroptosis is governed by differential regulation of transcription in liver cancer. (GSE104462) PMID: 31108460
+4) Clue.io data for erastin exposure (6h/24h post exposure). Output is Z scores from L1000 assay. https://clue.io/ 
 
+To accomplish this, the 24h Clue erastin data is used as the basis for the signatures which are then narrowed down by signficance/presence in RNA-seq datasets as well as consistent directional changes throughout all datasets. These gene signatures are then used to plot PCA of the samples and GO analysis is also performed on the signatures to rule out confounding processes like apoptosis. 
 
 # Load packages
 ```{r, warning=F, message=FALSE}
