@@ -25,7 +25,7 @@ library('magrittr')
 
 #BiocManager::install("singscore")
 library('singscore')
-install.packages("ggpubr")
+#install.packages("ggpubr")
 library('ggpubr')
 library('ggfortify')
 library('cowplot')
@@ -119,7 +119,7 @@ https://bioconductor.org/packages/devel/bioc/vignettes/singscore/inst/doc/singsc
 # downGenes - list of genes downregulated in gene signature
 # metacols - the columns of metadata within nbl_df
 
-calculate_signature_scores <- function(nbl_df, upGenes, downGenes, metacols = 1:30){
+calculate_signature_scores <- function(nbl_df = nbl, upGenes, downGenes, metacols = 1:30){
   
   # create temp dataframe
   cnts <- nbl_df %>% set_rownames(paste0('Sample_', 1:length(nbl_df$rlib)))
@@ -165,6 +165,9 @@ calculate_signature_scores <- function(nbl_df, upGenes, downGenes, metacols = 1:
   cnts %<>% mutate(directional_Zsum = upZsum + (downZsum * -1)) %>%
     dplyr::select(-Row.names)
   
+  # Correlation
+  print(paste0('Correlation b/t SingScore and Directional Zsum: ', cor(cnts$ss.TotalScore, cnts$directional_Zsum)))
+  
   # Return
   return(cnts)
   
@@ -176,7 +179,17 @@ calculate_signature_scores <- function(nbl_df, upGenes, downGenes, metacols = 1:
 ## Function to plot comparisons of interest
 ```{r}
 
-make_plots <- function(UPGENES, DOWNGENES, comp='comp', TIMEPOINT){
+# UPGENES - list of upregulated genes
+# DOWNGENES - list of downregulated genes
+# COMP - comparison variable/column
+# STAT_TEST - c('wilcox.test', 't.test', 'anova', 'kruskal.test')
+# TIMEPOINT = timepoint in nbl cohort to look at
+make_plots <- function(UPGENES, 
+                       DOWNGENES, 
+                       COMP='comp', 
+                       TIMEPOINT, 
+                       STAT_TEST = 'wilcox.test',
+                       TITLE = 'XX gene sig'){
   
   ####################
   # PCA PLOT by group
@@ -185,7 +198,8 @@ make_plots <- function(UPGENES, DOWNGENES, comp='comp', TIMEPOINT){
   dat <- nbl[, c('group', UPGENES, DOWNGENES)]
   a <- autoplot(dat %>% dplyr::select(-group) %>% prcomp(),
            data = dat,
-           colour = 'group') +
+           colour = 'group',
+           main = paste0('PCA using ', TITLE)) +
     theme_cowplot(12)
   
   
@@ -204,28 +218,28 @@ make_plots <- function(UPGENES, DOWNGENES, comp='comp', TIMEPOINT){
   scores %<>% dplyr::filter(timepoint %in% c(TIMEPOINT))
   
   # Plot 
-  b1 <- scores %>% ggplot(aes(x=comp, y=ss.TotalScore)) + 
+  b1 <- scores %>% ggplot(aes(x=get(COMP), y=ss.TotalScore)) + 
     geom_boxplot() +
     geom_jitter(alpha=0.6, width=0.15) +
     theme_bw(base_size=16) +
     labs(subtitle="SingScore by Risk group in dxprim") +
-    stat_compare_means(method = "wilcox.test")
+    stat_compare_means(method = STAT_TEST)
   
   # Plot 
-  b2 <- scores %>% ggplot(aes(x=comp, y=nondirectional_Zsum)) + 
+  b2 <- scores %>% ggplot(aes(x=get(COMP), y=nondirectional_Zsum)) + 
     geom_boxplot() +
     geom_jitter(alpha=0.6, width=0.15) +
     theme_bw(base_size=16) +
     labs(subtitle="Nondirectional Z score by Risk group in dxprim") +
-    stat_compare_means(method = "wilcox.test")
+    stat_compare_means(method = STAT_TEST)
   
   # Plot 
-  b3 <- scores %>% ggplot(aes(x=comp, y=directional_Zsum)) +
+  b3 <- scores %>% ggplot(aes(x=get(COMP), y=directional_Zsum)) +
     geom_boxplot() +
     geom_jitter(alpha=0.6, width=0.15) +
     theme_bw(base_size=16) +
     labs(subtitle="Directional Z score by Risk group in dxprim") +
-    stat_compare_means(method = "wilcox.test")
+    stat_compare_means(method = STAT_TEST)
   
   return(list(a,b1,b2,b3))
   
@@ -253,21 +267,196 @@ sig306_dn <- sig306 %>%
 
 ```
 
-### Plot gene signature in boxplots/pca
+### 306 gene signature for LR/IR/HR
 ```{r}
 
 # Define comparison
-nbl$comp <- ifelse(nbl$group %in% c('IR', "LR"), 'IR/LR', 'HR')
+nbl$comp <- nbl$group
 
 # plot PCA and boxplots
-make_plots(UPGENES = sig306_up, DOWNGENES = sig306_dn, comp = 'comp', TIMEPOINT = 'dxprim')
+make_plots(UPGENES = sig306_up, 
+           DOWNGENES = sig306_dn, 
+           COMP = 'comp', 
+           TIMEPOINT = 'dxprim', 
+           STAT_TEST = 'anova',
+           TITLE = '306 gene sig')
 
+```
+
+### 306 gene signature for Dinutuxumab response among HR
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$dinuresp_old
+
+# plot PCA and boxplots
+make_plots(UPGENES = sig306_up, 
+           DOWNGENES = sig306_dn, 
+           COMP = 'comp', 
+           TIMEPOINT = 'dxprim', 
+           STAT_TEST = 'anova',
+           TITLE = '306 gene sig')
+
+```
+
+
+## 63 gene signature
+
+### Load gene signature
+```{r}
+sig63 <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/gene_signatures/erastin_clue24h_gse104462_63genes.txt',
+                data.table = F)
+
+# Upregulated
+sig63_up <- sig63 %>% 
+  dplyr::filter(upregulated == T) %>% 
+  dplyr::select(V1) %>% unlist()
+
+# Downregulated
+sig63_dn <- sig63 %>% 
+  dplyr::filter(upregulated == F) %>% 
+  dplyr::select(V1) %>% unlist()
+
+
+```
+
+### 63 gene signature for LR/IR/HR
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$group
+
+# plot PCA and boxplots
+make_plots(UPGENES = sig63_up, 
+           DOWNGENES = sig63_dn, 
+           COMP = 'comp', 
+           TIMEPOINT = 'dxprim', 
+           STAT_TEST = 'anova',
+           TITLE = '63 gene sig')
+
+```
+
+### 63 gene signature for Dinutuxumab response among HR
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$dinuresp_old
+
+# plot PCA and boxplots
+make_plots(UPGENES = sig63_up, 
+           DOWNGENES = sig63_dn, 
+           COMP = 'comp', 
+           TIMEPOINT = 'dxprim', 
+           STAT_TEST = 'anova',
+           TITLE = '63 gene sig')
 
 ```
 
 
 
+## 46 gene signature
 
+### Load gene signature
+```{r}
+sig46 <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/gene_signatures/erastin_clue24h_gse104462_46genes.txt',
+                data.table = F)
+
+# Upregulated
+sig46_up <- sig46 %>% 
+  dplyr::filter(upregulated == T) %>% 
+  dplyr::select(V1) %>% unlist()
+
+# Downregulated
+sig46_dn <- sig46 %>% 
+  dplyr::filter(upregulated == F) %>% 
+  dplyr::select(V1) %>% unlist()
+
+
+```
+
+### 46 gene signature for LR/IR/HR
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$group
+
+# plot PCA and boxplots
+make_plots(UPGENES = sig46_up, 
+           DOWNGENES = sig46_dn, 
+           COMP = 'comp', 
+           TIMEPOINT = 'dxprim', 
+           STAT_TEST = 'anova',
+           TITLE = '46 gene sig')
+
+```
+
+### 46 gene signature for Dinutuxumab response among HR
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$dinuresp_old
+
+# plot PCA and boxplots
+make_plots(UPGENES = sig46_up, 
+           DOWNGENES = sig46_dn, 
+           COMP = 'comp', 
+           TIMEPOINT = 'dxprim', 
+           STAT_TEST = 'anova',
+           TITLE = '46 gene sig')
+
+```
+
+## 96 gene signature
+
+### Load gene signature
+```{r}
+sig96 <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/gene_signatures/erastin_elife_correlation_gse104462_96genes.txt',
+                data.table = F)
+
+# Upregulated
+sig96_up <- sig96 %>% 
+  dplyr::filter(GSE104462_LFC > 0) %>% 
+  dplyr::select(V1) %>% unlist()
+
+# Downregulated
+sig96_dn <- sig96 %>% 
+  dplyr::filter(GSE104462_LFC < 0) %>% 
+  dplyr::select(V1) %>% unlist()
+
+
+```
+
+### 96 gene signature for LR/IR/HR
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$group
+
+# plot PCA and boxplots
+make_plots(UPGENES = sig96_up, 
+           DOWNGENES = sig96_dn, 
+           COMP = 'comp', 
+           TIMEPOINT = 'dxprim', 
+           STAT_TEST = 'anova',
+           TITLE = '96 gene sig')
+
+```
+
+### 96 gene signature for Dinutuxumab response among HR
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$dinuresp_old
+
+# plot PCA and boxplots
+make_plots(UPGENES = sig96_up, 
+           DOWNGENES = sig96_dn, 
+           COMP = 'comp', 
+           TIMEPOINT = 'dxprim', 
+           STAT_TEST = 'anova',
+           TITLE = '96 gene sig')
+
+```
 
 
 
