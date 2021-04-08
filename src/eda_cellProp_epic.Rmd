@@ -277,13 +277,13 @@ make_plots <- function(DF = prop.sub,
   
 
   
-  return(list(b1,b2,b3,b4,b5,b6,b7))
+  return(list(b0,b1,b2,b3,b4,b5,b6,b7))
 
 }
 
 ```
 
-#### LR/IR vs HR 
+#### LR vs IR vs HR 
 ```{r}
 
 # Define comparison
@@ -313,11 +313,99 @@ make_plots(DF = dat,
 
 ```
 
+#### Pre/post dinutuxumab 
+```{r}
 
+# Define comparison
+prop$comp <- prop$dinu_treat_prepost
+dat <- prop %>% dplyr::filter(comp %in% c('postDIN', 'preDIN'))
 
+# plot PCA and boxplots
+make_plots(DF = dat,
+           COMP='comp', 
+           TIMEPOINT = 'all', 
+           STAT_TEST = 't.test',
+           COMPARISON_TITLE = 'Dinutuxumab Pre/Post')
 
+```
 
+#### Event-free survival from time of Dinutuximab txt split by mean
+```{r}
 
+# Quantiles of EFS time
+q <- quantile(prop$dinu_efstime, na.rm = T)
+
+# Define comparison
+prop$comp <- ifelse(prop$dinu_efstime >= q[3], 'Long EFS', 'Short EFS')
+dat <- prop %>% dplyr::filter(!is.na(dinu_efstime))
+
+# plot PCA and boxplots
+make_plots(DF = dat,
+           COMP='comp', 
+           TIMEPOINT = 'all', 
+           STAT_TEST = 't.test',
+           COMPARISON_TITLE = 'EFS split by mean(EFS)')
+
+```
+#### Event-free survival from time of Dinutuximab txt split into quartiles
+```{r}
+
+# Quantiles of EFS time
+q <- quantile(prop$dinu_efstime, na.rm = T)
+
+# Define comparison
+prop$comp <- ifelse(prop$dinu_efstime >= q[3], '3', '2')
+prop$comp <- ifelse(prop$dinu_efstime >= q[4], '4', prop$comp)
+prop$comp <- ifelse(prop$dinu_efstime < q[2], '1', prop$comp)
+dat <- prop %>% dplyr::filter(!is.na(dinu_efstime))
+
+# plot PCA and boxplots
+make_plots(DF = dat,
+           COMP='comp', 
+           TIMEPOINT = 'all', 
+           STAT_TEST = 'anova',
+           COMPARISON_TITLE = 'EFS split by quartiles')
+
+```
+
+#### Event-free survival from time of Dinutuximab txt split by mean
+```{r}
+
+# Quantiles of EFS time
+q <- quantile(prop$dinu_stime, na.rm = T)
+
+# Define comparison
+prop$comp <- ifelse(prop$dinu_stime >= q[3], 'Long OS', 'Short OS')
+dat <- prop %>% dplyr::filter(!is.na(dinu_stime))
+
+# plot PCA and boxplots
+make_plots(DF = dat,
+           COMP='comp', 
+           TIMEPOINT = 'all', 
+           STAT_TEST = 't.test',
+           COMPARISON_TITLE = 'OS split by mean(EFS)')
+
+```
+#### Overall survival from time of Dinutuximab txt split into quartiles
+```{r}
+
+# Quantiles of EFS time
+q <- quantile(prop$dinu_stime, na.rm = T)
+
+# Define comparison
+prop$comp <- ifelse(prop$dinu_stime >= q[3], '3', '2')
+prop$comp <- ifelse(prop$dinu_stime >= q[4], '4', prop$comp)
+prop$comp <- ifelse(prop$dinu_stime < q[2], '1', prop$comp)
+dat <- prop %>% dplyr::filter(!is.na(dinu_stime))
+
+# plot PCA and boxplots
+make_plots(DF = dat,
+           COMP='comp', 
+           TIMEPOINT = 'all', 
+           STAT_TEST = 'anova',
+           COMPARISON_TITLE = 'OS split by quartiles')
+
+```
 
 
 
