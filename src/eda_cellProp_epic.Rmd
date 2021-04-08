@@ -1,0 +1,323 @@
+---
+title: "eda_prop_epic"
+author: "Ryan Rebernick"
+date: "4/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Description:
+Runs EPIC package (https://github.com/GfellerLab/EPIC) on NBL RNA-seq cohort using TPM file. Then plots cell composition by comparisons of interest
+
+# Load packages
+```{r, warning=F, message=FALSE}
+
+#devtools::install_github("GfellerLab/EPIC", build_vignettes=TRUE)
+library('EPIC')
+
+library('plyr')
+library('dplyr')
+library('stringr')
+library('data.table')
+library('tidyverse')
+library('magrittr')
+
+library(ggpubr) # plot stats
+library(tidyr)
+
+```
+
+# Prepare NBL data for use in EPIC
+## Load data
+```{r}
+
+# TPM data 
+tpm <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/nbl_cohort/release/v1/nbl_expression-tpm.csv', data.table = F)
+
+```
+## Prepare TPM dataframe for use in EPIC
+```{r}
+
+# Remove any duplicate gene_ids so can transpose matrix
+## View duplicate common gene_ids
+duplicates <- tpm$gene_name[tpm$gene_name %>% duplicated()]
+## remove duplicates
+tpm %<>% dplyr::filter(!gene_name %in% duplicates)
+
+# reformat the RNA-seq counts for merging with the clinical data
+tpm %<>% set_rownames(tpm$gene_name) %>%
+  dplyr::select(-gene_name, -gene_id)
+
+```
+
+# Run EPIC
+Two subsets of epic run - the first triggers warnings for some cells. Documention indicates this is the result of the function not being able to optimize the model. This could either be d/t outliers or the samples could be fine. Running both ways for comparison.
+```{r}
+
+# Run epic
+epic <- EPIC(bulk = tpm,
+            withOtherCells = T)
+
+# Epic without samples triggering convergance problems (possible outliers that don't fit model)
+tpm %<>% dplyr::select(-c('SI_16114', 'SI_20823', 'SI_22590', 'SI_23003', 'SI_24708', 'SI_26443', 'SI_27655', 'SI_27656', 'SI_27750', 'SI_27782', 'SI_27796', 'SI_6792'))
+epic.sub <- EPIC(bulk = tpm,
+            withOtherCells = T)
+
+
+```
+
+
+# Combine with sample metadata and look at cell populations by groups of interest
+
+## Combine with metadata and choose desired samples
+#### Combine
+```{r}
+
+# Load the clinical data
+temp <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/nbl_cohort/release/ForRyan/20210403_ForRyan_2021_0403_nbl_rnaseq.txt', data.table = F)
+
+# Merge dataframes for downstream use
+prop <- merge(temp, epic$cellFractions, by.x = 'rlib', by.y = 0)
+prop.sub <- merge(temp, epic.sub$cellFractions, by.x = 'rlib', by.y = 0)
+
+```
+#### Select samples needed from full epic set
+Started with 146 samples.
+Filtered for samples based on the following criteria:
+- RNA capture method of 'capt'; ensured uniform RNA capture method [135/146]
+- Nonzero purity scores [110/135]
+- For rebiopsies of patient, took the sample with the higher purity w/in a timepoint (i.e. dxprim, dx2prim, ect) [100/110]
+- Eliminated samples which didn't fit the HR/LR/IR criteria [99/100]
+```{r}
+
+# Filter for desired samples
+prop %<>% 
+  ## Filter for the 'capt' RNA capture method
+  dplyr::filter(r.capture == 'capt') %>%
+  ## filter for nonzero purity of RNA
+  dplyr::filter(purity > 0) %>%
+  ## Combine timepoint refrel and relapse variables
+  dplyr::mutate(timepoint = ifelse(timepoint %in% c('refrel', 'relapse'), 'rel_ref', timepoint)) %>%
+  ## Generalize the timepoint variables
+  dplyr::mutate(genTime = ifelse(timepoint %in% c('dxprim', 'dx2prim', 'dxmet'), 'dx', timepoint)) %>%
+  ## Arrange by RNA purity for duplicate removal
+  dplyr::arrange(timepoint, -purity) %>%
+  ## Create pseudo variable for duplicate removal (ex. PO_3133)
+  dplyr::mutate(pt.time = paste0(patient, '.', timepoint))
+## show duplicates
+prop$patient[duplicated(prop$pt.time)]
+## remove duplicates based on purity, keeping highest purity
+prop <- prop[!duplicated(prop$pt.time),]
+## Ensure samples represent only risk rated groups
+prop %<>% dplyr::filter(group %in% c('HR', 'IR', 'LR'))
+
+# Create comparison variable for future use
+prop$comp <- ifelse(prop$group %in% c('IR', "LR"), 'IR/LR', 'HR')
+
+# Order dataframe cols
+prop %<>% dplyr::select(rlib:MYCN.cycle, comp, genTime, Bcells:otherCells)
+
+```
+#### Select samples needed from epic set with potential outlier samples removed
+Started with 133 samples.
+Filtered for samples based on the following criteria:
+- RNA capture method of 'capt'; ensured uniform RNA capture method [122/133]
+- Nonzero purity scores [100/135]
+- For rebiopsies of patient, took the sample with the higher purity w/in a timepoint (i.e. dxprim, dx2prim, ect) [92/100]
+- Eliminated samples which didn't fit the HR/LR/IR criteria [91/92]
+```{r}
+
+# Filter for desired samples
+prop.sub %<>% 
+  ## Filter for the 'capt' RNA capture method
+  dplyr::filter(r.capture == 'capt') %>%
+  ## filter for nonzero purity of RNA
+  dplyr::filter(purity > 0) %>%
+  ## Combine timepoint refrel and relapse variables
+  dplyr::mutate(timepoint = ifelse(timepoint %in% c('refrel', 'relapse'), 'rel_ref', timepoint)) %>%
+  ## Generalize the timepoint variables
+  dplyr::mutate(genTime = ifelse(timepoint %in% c('dxprim', 'dx2prim', 'dxmet'), 'dx', timepoint)) %>%
+  ## Arrange by RNA purity for duplicate removal
+  dplyr::arrange(timepoint, -purity) %>%
+  ## Create pseudo variable for duplicate removal (ex. PO_3133)
+  dplyr::mutate(pt.time = paste0(patient, '.', timepoint))
+## show duplicates
+prop.sub$patient[duplicated(prop.sub$pt.time)]
+## remove duplicates based on purity, keeping highest purity
+prop.sub <- prop.sub[!duplicated(prop.sub$pt.time),]
+## Ensure samples represent only risk rated groups
+prop.sub %<>% dplyr::filter(group %in% c('HR', 'IR', 'LR'))
+
+# Create comparison variable for future use
+prop.sub$comp <- ifelse(prop.sub$group %in% c('IR', "LR"), 'IR/LR', 'HR')
+
+# Order dataframe cols
+prop.sub %<>% dplyr::select(rlib:MYCN.cycle, comp, genTime, Bcells:otherCells)
+
+```
+
+
+
+## Look at cell populations in groups of interest
+#### Function to plot cell population by comparison group
+```{r}
+
+# DF - dataframe with metadata and EPIC output merged
+# COMP - comparison variable/column
+# STAT_TEST - c('wilcox.test', 't.test', 'anova', 'kruskal.test')
+# TIMEPOINT = timepoint in nbl cohort to look at
+# COMPARISON_TITLE - plot title
+make_plots <- function(DF = prop.sub,
+                       COMP='comp', 
+                       TIMEPOINT = 'all', 
+                       STAT_TEST = 'wilcox.test',
+                       COMPARISON_TITLE = 'COMPARISON'){
+  
+
+
+  ####################
+  # Select samples 
+  ####################
+
+  # select samples
+  if(TIMEPOINT %in% c('dx2prim', 'dxmet', 'dxprim', 'posttx', 'rel_ref')){
+    DF %<>% dplyr::filter(timepoint %in% c(TIMEPOINT))
+  } else if(TIMEPOINT == 'all'){
+    print('All timepoints included')
+  } else {
+    break
+  }
+  
+  ####################
+  # Boxplot 
+  ####################
+  
+  # Plot 
+  ## B cells
+  b0 <- DF %>% ggplot(aes(x=get(COMP), y=c(Bcells))) + 
+    geom_boxplot() +
+    geom_jitter(alpha=0.6, width=0.15) +
+    theme_bw(base_size=16) +
+    labs(subtitle=paste0("Proportion Bcells: ", COMPARISON_TITLE)) +
+    xlab(NULL) +
+    stat_compare_means(method = STAT_TEST)
+  
+  ## CAFs
+  b1 <- DF %>% ggplot(aes(x=get(COMP), y=c(CAFs))) + 
+    geom_boxplot() +
+    geom_jitter(alpha=0.6, width=0.15) +
+    theme_bw(base_size=16) +
+    labs(subtitle=paste0("Proportion CAFs: ", COMPARISON_TITLE)) +
+    xlab(NULL) +
+    stat_compare_means(method = STAT_TEST)
+  
+  ## CD4_Tcells
+  b2 <- DF %>% ggplot(aes(x=get(COMP), y=c(CD4_Tcells))) + 
+    geom_boxplot() +
+    geom_jitter(alpha=0.6, width=0.15) +
+    theme_bw(base_size=16) +
+    labs(subtitle=paste0("Proportion CD4_Tcells: ", COMPARISON_TITLE)) +
+    xlab(NULL) +
+    stat_compare_means(method = STAT_TEST)
+  
+  ## Endothelial
+  b3 <- DF %>% ggplot(aes(x=get(COMP), y=c(Endothelial))) + 
+    geom_boxplot() +
+    geom_jitter(alpha=0.6, width=0.15) +
+    theme_bw(base_size=16) +
+    labs(subtitle=paste0("Proportion Endothelial: ", COMPARISON_TITLE)) +
+    xlab(NULL) +
+    stat_compare_means(method = STAT_TEST)
+  
+  ## Macrophages
+  b4 <- DF %>% ggplot(aes(x=get(COMP), y=c(Macrophages))) + 
+    geom_boxplot() +
+    geom_jitter(alpha=0.6, width=0.15) +
+    theme_bw(base_size=16) +
+    labs(subtitle=paste0("Proportion Macrophages: ", COMPARISON_TITLE)) +
+    xlab(NULL) +
+    stat_compare_means(method = STAT_TEST)
+  
+  ## NKcells
+  b5 <- DF %>% ggplot(aes(x=get(COMP), y=c(NKcells))) + 
+    geom_boxplot() +
+    geom_jitter(alpha=0.6, width=0.15) +
+    theme_bw(base_size=16) +
+    labs(subtitle=paste0("Proportion NKcells: ", COMPARISON_TITLE)) +
+    xlab(NULL) +
+    stat_compare_means(method = STAT_TEST)
+  
+  ## otherCells
+  b6 <- DF %>% ggplot(aes(x=get(COMP), y=c(otherCells))) + 
+    geom_boxplot() +
+    geom_jitter(alpha=0.6, width=0.15) +
+    theme_bw(base_size=16) +
+    labs(subtitle=paste0("Proportion otherCells: ", COMPARISON_TITLE)) +
+    xlab(NULL) +
+    stat_compare_means(method = STAT_TEST)
+  
+  ## All cell types together
+  b7 <- DF %>% gather(., cellType, value, Bcells:otherCells, factor_key=T) %>%
+    ggplot(aes(x=cellType, y=value, fill=get(COMP))) +
+    geom_boxplot() +
+    theme_bw(base_size=16) +
+    labs(subtitle=paste0("Proportion all cells: ", COMPARISON_TITLE)) +
+    xlab(NULL) +
+    ylab('Proportion') +
+    theme(axis.text.x = element_text(size = 8, angle = 45)) + 
+            guides(fill=guide_legend(title="Comparison")) +
+    stat_compare_means(method = STAT_TEST,
+                       aes(group = get(COMP)), 
+                       label = "p.signif")
+
+  
+  
+
+  
+  return(list(b1,b2,b3,b4,b5,b6,b7))
+
+}
+
+```
+
+#### LR/IR vs HR 
+```{r}
+
+# Define comparison
+prop$comp <- prop$group
+
+# plot PCA and boxplots
+make_plots(DF = prop,
+           COMP='comp', 
+           TIMEPOINT = 'dxprim', 
+           STAT_TEST = 'anova',
+           COMPARISON_TITLE = 'LR/IR vs HR')
+
+```
+#### Dinutuxumab response
+```{r}
+
+# Define comparison
+prop$comp <- prop$dinuresp_old
+dat <- prop %>% dplyr::filter(!comp %in% c('nothr', 'pending'))
+
+# plot PCA and boxplots
+make_plots(DF = dat,
+           COMP='comp', 
+           TIMEPOINT = 'dxprim', 
+           STAT_TEST = 'anova',
+           COMPARISON_TITLE = 'Dinutuxumab Response')
+
+```
+
+
+
+
+
+
+
+
+
