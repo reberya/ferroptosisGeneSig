@@ -289,7 +289,7 @@ make_plots <- function(DF = prop.sub,
 # Define comparison
 prop$comp <- prop$group
 
-# plot PCA and boxplots
+# plot boxplots
 make_plots(DF = prop,
            COMP='comp', 
            TIMEPOINT = 'dxprim', 
@@ -304,7 +304,7 @@ make_plots(DF = prop,
 prop$comp <- prop$dinuresp_old
 dat <- prop %>% dplyr::filter(!comp %in% c('nothr', 'pending'))
 
-# plot PCA and boxplots
+# plot boxplots
 make_plots(DF = dat,
            COMP='comp', 
            TIMEPOINT = 'dxprim', 
@@ -320,7 +320,7 @@ make_plots(DF = dat,
 prop$comp <- prop$dinu_treat_prepost
 dat <- prop %>% dplyr::filter(comp %in% c('postDIN', 'preDIN'))
 
-# plot PCA and boxplots
+# plot boxplots
 make_plots(DF = dat,
            COMP='comp', 
            TIMEPOINT = 'all', 
@@ -339,7 +339,7 @@ q <- quantile(prop$dinu_efstime, na.rm = T)
 prop$comp <- ifelse(prop$dinu_efstime >= q[3], 'Long EFS', 'Short EFS')
 dat <- prop %>% dplyr::filter(!is.na(dinu_efstime))
 
-# plot PCA and boxplots
+# plot boxplots
 make_plots(DF = dat,
            COMP='comp', 
            TIMEPOINT = 'all', 
@@ -359,7 +359,7 @@ prop$comp <- ifelse(prop$dinu_efstime >= q[4], '4', prop$comp)
 prop$comp <- ifelse(prop$dinu_efstime < q[2], '1', prop$comp)
 dat <- prop %>% dplyr::filter(!is.na(dinu_efstime))
 
-# plot PCA and boxplots
+# plot boxplots
 make_plots(DF = dat,
            COMP='comp', 
            TIMEPOINT = 'all', 
@@ -378,7 +378,7 @@ q <- quantile(prop$dinu_stime, na.rm = T)
 prop$comp <- ifelse(prop$dinu_stime >= q[3], 'Long OS', 'Short OS')
 dat <- prop %>% dplyr::filter(!is.na(dinu_stime))
 
-# plot PCA and boxplots
+# plot boxplots
 make_plots(DF = dat,
            COMP='comp', 
            TIMEPOINT = 'all', 
@@ -398,7 +398,7 @@ prop$comp <- ifelse(prop$dinu_stime >= q[4], '4', prop$comp)
 prop$comp <- ifelse(prop$dinu_stime < q[2], '1', prop$comp)
 dat <- prop %>% dplyr::filter(!is.na(dinu_stime))
 
-# plot PCA and boxplots
+# plot boxplots
 make_plots(DF = dat,
            COMP='comp', 
            TIMEPOINT = 'all', 
