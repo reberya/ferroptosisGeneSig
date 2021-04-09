@@ -170,7 +170,7 @@ calculate_signature_scores <- function(nbl_df = nbl, upGenes, downGenes, metacol
   
   
   # Select columns
-  cnts %<>% dplyr::select(metacols, ss.TotalScore:ss.DownDispersion, nondirectional_Zsum, upZsum, downZsum)
+  cnts %<>% dplyr::select(metacols, ss.TotalScore:ss.DownDispersion, upZsum, downZsum)
   cnts %<>% mutate(directional_Zsum = upZsum + (downZsum * -1)) %>%
     dplyr::select(-Row.names)
   
@@ -245,13 +245,13 @@ make_plots <- function(
     xlab(NULL)
   
   # Plot 
-  b2 <- scores %>% ggplot(aes(x=get(COMP), y=nondirectional_Zsum)) + 
-    geom_boxplot() +
-    geom_jitter(alpha=0.6, width=0.15) +
-    theme_bw(base_size=16) +
-    labs(subtitle="Nondirectional Z score by Risk group in dxprim") +
-    stat_compare_means(method = STAT_TEST) +
-    xlab(NULL)
+  # b2 <- scores %>% ggplot(aes(x=get(COMP), y=nondirectional_Zsum)) + 
+  #   geom_boxplot() +
+  #   geom_jitter(alpha=0.6, width=0.15) +
+  #   theme_bw(base_size=16) +
+  #   labs(subtitle="Nondirectional Z score by Risk group in dxprim") +
+  #   stat_compare_means(method = STAT_TEST) +
+  #   xlab(NULL)
   
   # Plot 
   b3 <- scores %>% ggplot(aes(x=get(COMP), y=directional_Zsum)) +
@@ -262,7 +262,7 @@ make_plots <- function(
     stat_compare_means(method = STAT_TEST) +
     xlab(NULL)
   
-  return(list(a,b1,b2,b3))
+  return(list(scores,a,b1,b3))
   
 }
 
@@ -296,8 +296,8 @@ sig306_dn <- sig306 %>%
 # Define comparison
 nbl$comp <- nbl$group
 
-# plot PCA and boxplots
-make_plots(
+# get PCA and boxplots
+cur <- make_plots(
   DF = nbl,
   UPGENES = sig306_up, 
   DOWNGENES = sig306_dn, 
@@ -306,8 +306,28 @@ make_plots(
   STAT_TEST = 'anova',
   TITLE = '306 gene sig')
 
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
+cur <- cur[[1]]
+
+# select HR and group into 2 subgroups seen
+cur %<>% dplyr::filter(comp == 'HR') %>%
+  mutate(subset = ifelse(ss.TotalScore > -.05, 'sub_hi', 'sub_lo'))
+
+# table vars of interest - proportions
+prop.table(table(cur$subset, cur$timepoint), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
+prop.table(table(cur$subset, cur$dinuresp_old), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
+prop.table(table(cur$subset, cur$dinu_treat_prepost), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
+prop.table(table(cur$subset, cur$site), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
+
+# Raw values
+table(cur$dinu_treat_prepost, cur$subset) %>% barplot(beside=T, legend=rownames(.))
+
+
 ```
-### 306 gene signature for Dinutuxumab response among HR
+### 306 gene signature for Dinutuxumab response among HR (1/2/3/4)
 ```{r}
 
 # Define comparison
@@ -325,12 +345,31 @@ make_plots(
   TITLE = '306 gene sig')
 
 ```
+### 306 gene signature for Dinutuxumab response among HR (1/234)
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$dinuresp_old
+nbl %<>% mutate(comp = ifelse(comp %in% c('group2', 'group3', 'group4'), 'group234', comp))
+dat <- nbl %>% dplyr::filter(!comp %in% c('pending'))
+
+# plot PCA and boxplots
+make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'dxprim', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+
+```
 ### 306 gene signature for Dinutuxumab response pre/post Dinituximab
 ```{r}
 
 # Define comparison
 nbl$comp <- nbl$dinu_treat_prepost
-dat <- nbl %>% dplyr::filter(comp %in% c('postDIN', 'preDIN'))
+dat <- nbl %>% dplyr::mutate(comp = ifelse(!comp %in% c('postDIN', 'preDIN'), 'noDIN', comp))
 
 # plot PCA and boxplots
 make_plots(
@@ -339,8 +378,31 @@ make_plots(
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
   TIMEPOINT = 'all', 
-  STAT_TEST = 't.test',
+  STAT_TEST = 'anova',
   TITLE = '306 gene sig')
+
+```
+### 306 gene signature for Dinutuxumab response pre/post Dinituximab split by Dinitux_response
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$dinu_treat_prepost
+dat <- nbl %>% dplyr::mutate(comp = ifelse(!comp %in% c('postDIN', 'preDIN'), 'noDIN', comp))
+
+# calculate scores
+scores <- calculate_signature_scores(nbl_df = dat, 
+                                     upGenes = sig306_up,
+                                     downGenes = sig306_dn)
+
+# Plot 
+scores %<>% dplyr::filter(dinuresp_old != 'pending') %>%
+  mutate(dinuresp_old = ifelse(dinuresp_old %in% c('group2', 'group3', 'group4'), 'group234', dinuresp_old))
+scores %>% ggplot(., aes(x=comp, y=ss.TotalScore, color=dinuresp_old)) + 
+  geom_boxplot(color='black') +
+  geom_jitter(alpha=0.6, width=0.15) +
+  theme_bw(base_size=16) +
+  labs(subtitle="SingScore: Biopsy time with response group") +
+  xlab(NULL)
 
 ```
 ### 306 gene signature for Event Free Survival ( split by mean)
@@ -435,6 +497,40 @@ make_plots(
   TITLE = '306 gene sig')
 
 ```
+### 306 gene signature for HR (1/234) with additional info on pre/post DIN
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$dinuresp_old
+nbl %<>% mutate(comp = ifelse(comp %in% c('group2', 'group3', 'group4'), 'group234', comp))
+dat <- nbl %>% dplyr::filter(!comp %in% c('pending'))
+
+# calculate scores
+scores <- calculate_signature_scores(nbl_df = dat, 
+                                     upGenes = sig306_up,
+                                     downGenes = sig306_dn)
+
+# Add 
+scores %<>% mutate(subset = ifelse(ss.TotalScore > -.05, 'sub_hi', 'sub_lo')) %>%
+  mutate(dinu_treat_prepost = ifelse(dinu_treat_prepost %in% c('postDIN', 'preDIN'), dinu_treat_prepost, 'unknown'))
+
+# Plot 
+# scores %<>% dplyr::filter(dinutx == 1)
+scores %>% ggplot(., aes(x=comp, y=ss.TotalScore, color=dinu_treat_prepost)) + 
+  geom_boxplot(color='black') +
+  geom_jitter(alpha=0.6, width=0.15) +
+  theme_bw(base_size=16) +
+  labs(subtitle="SingScore by Risk group in dxprim") +
+  xlab(NULL)
+
+```
+
+
+
+
+
+
+
 
 ## 63 gene signature
 
