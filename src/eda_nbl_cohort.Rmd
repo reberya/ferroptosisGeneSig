@@ -40,6 +40,7 @@ library('singscore')
 library('ggpubr')
 library('ggfortify')
 library('cowplot')
+library(survival)
 
 ```
 
@@ -133,13 +134,6 @@ calculate_signature_scores <- function(nbl_df = nbl, upGenes, downGenes, metacol
   # create temp dataframe
   cnts <- nbl_df %>% set_rownames(paste0('Sample_', 1:length(nbl_df$rlib)))
   
-  # return genes not in provided gene list and remove from query
-  print(paste0('Up genes not in count matrix: ', upGenes[!upGenes %in% colnames(cnts)]))
-  print(paste0('Down genes not in count matrix: ', downGenes[!downGenes %in% colnames(cnts)]))
-  upGenes <- upGenes[upGenes %in% colnames(cnts)]
-  downGenes <- downGenes[downGenes %in% colnames(cnts)]
-  
-  
   # Score samples using singScore and merge
   ## score
   rankData <- cnts %>% dplyr::select(-metacols) %>%  t() %>% rankGenes()
@@ -204,6 +198,14 @@ make_plots <- function(
   TITLE = 'XX gene sig'){
   
   ####################
+  # return genes not in provided gene list and remove from query
+  ####################
+  print(paste0('Up genes not in count matrix: ', UPGENES[!UPGENES %in% colnames(DF)]))
+  print(paste0('Down genes not in count matrix: ', DOWNGENES[!DOWNGENES %in% colnames(DF)]))
+  UPGENES <- UPGENES[UPGENES %in% colnames(DF)]
+  DOWNGENES <- DOWNGENES[DOWNGENES %in% colnames(DF)]
+  
+  ####################
   # PCA PLOT by group
   ####################
   set.seed(11)
@@ -240,7 +242,7 @@ make_plots <- function(
     geom_boxplot() +
     geom_jitter(alpha=0.6, width=0.15) +
     theme_bw(base_size=16) +
-    labs(subtitle="SingScore by Risk group in dxprim") +
+    labs(subtitle=paste0("SingScore by Risk group in dxprim: ", TITLE)) +
     stat_compare_means(method = STAT_TEST) +
     xlab(NULL)
   
@@ -258,7 +260,7 @@ make_plots <- function(
     geom_boxplot() +
     geom_jitter(alpha=0.6, width=0.15) +
     theme_bw(base_size=16) +
-    labs(subtitle="Directional Z score by Risk group in dxprim") +
+    labs(subtitle=paste0("Directional Z score by Risk group in dxprim: ", TITLE)) +
     stat_compare_means(method = STAT_TEST) +
     xlab(NULL)
   
@@ -287,6 +289,36 @@ sig306_up <- sig306 %>%
 sig306_dn <- sig306 %>% 
   dplyr::filter(upregulated == F) %>% 
   dplyr::select(V1) %>% unlist()
+
+
+```
+### Distribution of 306 gene signature scores in all patients. Correlation with SLC levels
+```{r}
+
+# Define comparison
+nbl$comp <- 'all'
+
+# get PCA and boxplots
+cur <- make_plots(
+  DF = nbl,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+
+# Plot distribution of sing score
+cur[3]
+
+# Look at correlation of singscore with SLC levels
+cur <- cur[[1]]
+cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
+  merge(., nbl, by = 'rlib')
+cor(cur$ss.TotalScore, cur$SLC3A2)
+cor(cur$ss.TotalScore, cur$SLC7A11)
+cor(cur$directional_Zsum, cur$SLC3A2)
+cor(cur$directional_Zsum, cur$SLC7A11)
 
 
 ```
@@ -405,96 +437,82 @@ scores %>% ggplot(., aes(x=comp, y=ss.TotalScore, color=dinuresp_old)) +
   xlab(NULL)
 
 ```
-### 306 gene signature for Event Free Survival ( split by mean)
+### 306 gene signature Kaplan meijer for OS
 ```{r}
 
-# Quantiles of EFS time
-q <- quantile(nbl$dinu_efstime, na.rm = T)
+# Filter dat for those with OS scores, keeping non-duplicate patients
+dat <- nbl %>% 
+  # remove those w/o times
+  dplyr::filter(!is.na(dinu_stime)) %>%
+  # for duplicate preferentially keep the dxprims (doesn't really matter since all have same survival time vals)
+  dplyr::mutate(timepoint = factor(timepoint, levels = c('dxprim', 'dx2prim', 'dxmet', 'posttx', 'rel_ref', 'pending'))) %>%
+  arrange(timepoint) %>%
+  dplyr::filter(!duplicated(patient))
 
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_efstime >= q[3], 'Long EFS', 'Short EFS')
-dat <- nbl %>% dplyr::filter(!is.na(dinu_efstime))
-
-
-# plot PCA and boxplots
-make_plots(
+# get sigscores for stratifying in kaplan meijer curve
+cur <- make_plots(
   DF = dat,
   UPGENES = sig306_up, 
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 't.test',
-  TITLE = '306 gene sig')
-
-```
-### 306 gene signature for Event Free Survival ( split by quartile )
-```{r}
-
-# get quartiles
-q <- quantile(nbl$dinu_efstime, na.rm = T)
-
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_efstime >= q[3], '3', '2')
-nbl$comp <- ifelse(nbl$dinu_efstime >= q[4], '4', nbl$comp)
-nbl$comp <- ifelse(nbl$dinu_efstime < q[2], '1', nbl$comp)
-dat <- nbl %>% dplyr::filter(!is.na(dinu_efstime))
-
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig306_up, 
-  DOWNGENES = sig306_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
+  TIMEPOINT = 'dxprim', 
   STAT_TEST = 'anova',
   TITLE = '306 gene sig')
+cur <- cur[[1]]
+
+# stratify by quartile 
+cur %<>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
+
+# stratify by visual cutoff
+cur %<>% mutate(comp = ifelse(ss.TotalScore > -0.05, 'hi', 'lo'))
+
+# plot Kaplan meijer
+km_fit <- survfit(Surv(dinu_stime, rep(1, length(dat$rlib))) ~ comp, data=cur)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit)
 
 ```
-### 306 gene signature for Overall Survival ( split by mean)
+### 306 gene signature Kaplan meijer for EFS
 ```{r}
 
-# Quantiles of EFS time
-q <- quantile(nbl$dinu_stime, na.rm = T)
+# Filter dat for those with OS scores, keeping non-duplicate patients
+dat <- nbl %>% 
+  # remove those w/o times
+  dplyr::filter(!is.na(dinu_efstime)) %>%
+  # for duplicate preferentially keep the dxprims (doesn't really matter since all have same survival time vals)
+  dplyr::mutate(timepoint = factor(timepoint, levels = c('dxprim', 'dx2prim', 'dxmet', 'posttx', 'rel_ref', 'pending'))) %>%
+  arrange(timepoint) %>%
+  dplyr::filter(!duplicated(patient))
 
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_stime >= q[3], 'Long OS', 'Short OS')
-dat <- nbl %>% dplyr::filter(!is.na(dinu_stime))
-
-
-# plot PCA and boxplots
-make_plots(
+# get sigscores for stratifying in kaplan meijer curve
+cur <- make_plots(
   DF = dat,
   UPGENES = sig306_up, 
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 't.test',
-  TITLE = '306 gene sig')
-
-```
-### 306 gene signature for Overall Survival ( split by quartile )
-```{r}
-
-# get quartiles
-q <- quantile(nbl$dinu_stime, na.rm = T)
-
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_stime >= q[3], '3', '2')
-nbl$comp <- ifelse(nbl$dinu_stime >= q[4], '4', nbl$comp)
-nbl$comp <- ifelse(nbl$dinu_stime < q[2], '1', nbl$comp)
-dat <- nbl %>% dplyr::filter(!is.na(dinu_stime))
-
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig306_up, 
-  DOWNGENES = sig306_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
+  TIMEPOINT = 'dxprim', 
   STAT_TEST = 'anova',
   TITLE = '306 gene sig')
+cur <- cur[[1]]
+
+# stratify by quartile 
+cur %<>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
+
+# stratify by visual cutoff
+cur %<>% mutate(comp = ifelse(ss.TotalScore > -0.05, 'hi', 'lo'))
+
+# plot Kaplan meijer
+km_fit <- survfit(Surv(dinu_efstime, rep(1, length(dat$rlib))) ~ comp, data=cur)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit)
 
 ```
 ### 306 gene signature for HR (1/234) with additional info on pre/post DIN
@@ -526,12 +544,6 @@ scores %>% ggplot(., aes(x=comp, y=ss.TotalScore, color=dinu_treat_prepost)) +
 ```
 
 
-
-
-
-
-
-
 ## 63 gene signature
 
 ### Load gene signature
@@ -548,6 +560,37 @@ sig63_up <- sig63 %>%
 sig63_dn <- sig63 %>% 
   dplyr::filter(upregulated == F) %>% 
   dplyr::select(V1) %>% unlist()
+
+
+```
+### Distribution of 63 gene signature scores in all patients. Correlation with SLC levels
+```{r}
+
+# Define comparison
+nbl$comp <- 'all'
+
+# get PCA and boxplots
+cur <- make_plots(
+  DF = nbl,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'anova',
+  TITLE = '63 gene sig')
+
+# Plot distribution of sing score
+cur[3]
+cur[4]
+
+# Look at correlation of singscore with SLC levels
+cur <- cur[[1]]
+cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
+  merge(., nbl, by = 'rlib')
+cor(cur$ss.TotalScore, cur$SLC3A2)
+cor(cur$ss.TotalScore, cur$SLC7A11)
+cor(cur$directional_Zsum, cur$SLC3A2)
+cor(cur$directional_Zsum, cur$SLC7A11)
 
 
 ```
@@ -604,98 +647,7 @@ make_plots(
   TITLE = '63 gene sig')
 
 ```
-### 63 gene signature for Event Free Survival ( split by mean)
-```{r}
 
-# Quantiles of EFS time
-q <- quantile(nbl$dinu_efstime, na.rm = T)
-
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_efstime >= q[3], 'Long EFS', 'Short EFS')
-dat <- nbl %>% dplyr::filter(!is.na(dinu_efstime))
-
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 't.test',
-  TITLE = '63 gene sig')
-
-```
-### 63 gene signature for Event Free Survival ( split by quartile )
-```{r}
-
-# get quartiles
-q <- quantile(nbl$dinu_efstime, na.rm = T)
-
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_efstime >= q[3], '3', '2')
-nbl$comp <- ifelse(nbl$dinu_efstime >= q[4], '4', nbl$comp)
-nbl$comp <- ifelse(nbl$dinu_efstime < q[2], '1', nbl$comp)
-dat <- nbl %>% dplyr::filter(!is.na(dinu_efstime))
-
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
-
-```
-### 63 gene signature for Overall Survival ( split by mean)
-```{r}
-
-# Quantiles of EFS time
-q <- quantile(nbl$dinu_stime, na.rm = T)
-
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_stime >= q[3], 'Long OS', 'Short OS')
-dat <- nbl %>% dplyr::filter(!is.na(dinu_stime))
-
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 't.test',
-  TITLE = '63 gene sig')
-
-```
-### 63 gene signature for Overall Survival ( split by quartile )
-```{r}
-
-# get quartiles
-q <- quantile(nbl$dinu_stime, na.rm = T)
-
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_stime >= q[3], '3', '2')
-nbl$comp <- ifelse(nbl$dinu_stime >= q[4], '4', nbl$comp)
-nbl$comp <- ifelse(nbl$dinu_stime < q[2], '1', nbl$comp)
-dat <- nbl %>% dplyr::filter(!is.na(dinu_stime))
-
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
-
-```
 
 ## 46 gene signature
 
@@ -713,6 +665,37 @@ sig46_up <- sig46 %>%
 sig46_dn <- sig46 %>% 
   dplyr::filter(upregulated == F) %>% 
   dplyr::select(V1) %>% unlist()
+
+
+```
+### Distribution of 46 gene signature scores in all patients. Correlation with SLC levels
+```{r}
+
+# Define comparison
+nbl$comp <- 'all'
+
+# get PCA and boxplots
+cur <- make_plots(
+  DF = nbl,
+  UPGENES = sig46_up, 
+  DOWNGENES = sig46_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'anova',
+  TITLE = '46 gene sig')
+
+# Plot distribution of sing score
+cur[3]
+cur[4]
+
+# Look at correlation of singscore with SLC levels
+cur <- cur[[1]]
+cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
+  merge(., nbl, by = 'rlib')
+cor(cur$ss.TotalScore, cur$SLC3A2)
+cor(cur$ss.TotalScore, cur$SLC7A11)
+cor(cur$directional_Zsum, cur$SLC3A2)
+cor(cur$directional_Zsum, cur$SLC7A11)
 
 
 ```
@@ -769,98 +752,7 @@ make_plots(
   TITLE = '46 gene sig')
 
 ```
-### 46 gene signature for Event Free Survival ( split by mean)
-```{r}
 
-# Quantiles of EFS time
-q <- quantile(nbl$dinu_efstime, na.rm = T)
-
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_efstime >= q[3], 'Long EFS', 'Short EFS')
-dat <- nbl %>% dplyr::filter(!is.na(dinu_efstime))
-
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig46_up, 
-  DOWNGENES = sig46_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 't.test',
-  TITLE = '46 gene sig')
-
-```
-### 46 gene signature for Event Free Survival ( split by quartile )
-```{r}
-
-# get quartiles
-q <- quantile(nbl$dinu_efstime, na.rm = T)
-
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_efstime >= q[3], '3', '2')
-nbl$comp <- ifelse(nbl$dinu_efstime >= q[4], '4', nbl$comp)
-nbl$comp <- ifelse(nbl$dinu_efstime < q[2], '1', nbl$comp)
-dat <- nbl %>% dplyr::filter(!is.na(dinu_efstime))
-
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig46_up, 
-  DOWNGENES = sig46_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 'anova',
-  TITLE = '46 gene sig')
-
-```
-### 46 gene signature for Overall Survival ( split by mean)
-```{r}
-
-# Quantiles of EFS time
-q <- quantile(nbl$dinu_stime, na.rm = T)
-
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_stime >= q[3], 'Long OS', 'Short OS')
-dat <- nbl %>% dplyr::filter(!is.na(dinu_stime))
-
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig46_up, 
-  DOWNGENES = sig46_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 't.test',
-  TITLE = '46 gene sig')
-
-```
-### 46 gene signature for Overall Survival ( split by quartile )
-```{r}
-
-# get quartiles
-q <- quantile(nbl$dinu_stime, na.rm = T)
-
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_stime >= q[3], '3', '2')
-nbl$comp <- ifelse(nbl$dinu_stime >= q[4], '4', nbl$comp)
-nbl$comp <- ifelse(nbl$dinu_stime < q[2], '1', nbl$comp)
-dat <- nbl %>% dplyr::filter(!is.na(dinu_stime))
-
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig46_up, 
-  DOWNGENES = sig46_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 'anova',
-  TITLE = '46 gene sig')
-
-```
 
 ## 96 gene signature
 
@@ -878,6 +770,37 @@ sig96_up <- sig96 %>%
 sig96_dn <- sig96 %>% 
   dplyr::filter(GSE104462_LFC < 0) %>% 
   dplyr::select(V1) %>% unlist()
+
+
+```
+### Distribution of 96 gene signature scores in all patients. Correlation with SLC levels
+```{r}
+
+# Define comparison
+nbl$comp <- 'all'
+
+# get PCA and boxplots
+cur <- make_plots(
+  DF = nbl,
+  UPGENES = sig96_up, 
+  DOWNGENES = sig96_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'anova',
+  TITLE = '96 gene sig')
+
+# Plot distribution of sing score
+cur[3]
+cur[4]
+
+# Look at correlation of singscore with SLC levels
+cur <- cur[[1]]
+cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
+  merge(., nbl, by = 'rlib')
+cor(cur$ss.TotalScore, cur$SLC3A2)
+cor(cur$ss.TotalScore, cur$SLC7A11)
+cor(cur$directional_Zsum, cur$SLC3A2)
+cor(cur$directional_Zsum, cur$SLC7A11)
 
 
 ```
@@ -934,98 +857,251 @@ make_plots(
   TITLE = '96 gene sig')
 
 ```
-### 96 gene signature for Event Free Survival ( split by mean)
+
+
+## Elife gene signature
+
+## Load gene signature
 ```{r}
 
-# Quantiles of EFS time
-q <- quantile(nbl$dinu_efstime, na.rm = T)
+elife_up <- c('CHAC1', 'DDIT4', 'LOC284561', 'ASNS', 'TSC22D3', 'DDIT3', 'JDP2', 'SESN2',
+              'SLC1A4', 'PCK2', 'SLC7A11', 'TXNIP', 'VLDLR', 'GPT2', 'PSAT1', 'C9ORF150',
+              'SLC7A5', 'HERPUD1', 'XBP1', 'ATF3', 'SLC3A2', 'CBS', 'ATF4', 'ZNF419', 
+              'KLHL24', 'TRIB3', 'ZNF643', 'ATP6V1G2', 'VEGFA', 'GDF15', 'TUBE1', 
+              'ARRDC3', 'CEBPG')
 
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_efstime >= q[3], 'Long EFS', 'Short EFS')
-dat <- nbl %>% dplyr::filter(!is.na(dinu_efstime))
-
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig96_up, 
-  DOWNGENES = sig96_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 't.test',
-  TITLE = '96 gene sig')
-
+elife_down <- c('SNORA16A', 'RGS4', 'MUTED-TXNDC5', 'LOC390705')
 ```
-### 96 gene signature for Event Free Survival ( split by quartile )
+### Distribution of elife gene signature scores in all patients. Correlation with SLC levels
 ```{r}
 
-# get quartiles
-q <- quantile(nbl$dinu_efstime, na.rm = T)
-
 # Define comparison
-nbl$comp <- ifelse(nbl$dinu_efstime >= q[3], '3', '2')
-nbl$comp <- ifelse(nbl$dinu_efstime >= q[4], '4', nbl$comp)
-nbl$comp <- ifelse(nbl$dinu_efstime < q[2], '1', nbl$comp)
-dat <- nbl %>% dplyr::filter(!is.na(dinu_efstime))
+nbl$comp <- 'all'
 
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig96_up, 
-  DOWNGENES = sig96_dn, 
+# get PCA and boxplots
+cur <- make_plots(
+  DF = nbl,
+  UPGENES = elife_up, 
+  DOWNGENES = elife_down, 
   COMP = 'comp', 
   TIMEPOINT = 'all', 
   STAT_TEST = 'anova',
-  TITLE = '96 gene sig')
+  TITLE = 'elife gene sig')
+
+# Plot distribution of sing score and directional z score
+cur[3]
+cur[4]
+
+# Look at correlation of singscore with SLC levels
+cur <- cur[[1]]
+cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
+  merge(., nbl, by = 'rlib')
+cor(cur$ss.TotalScore, cur$SLC3A2)
+cor(cur$ss.TotalScore, cur$SLC7A11)
+cor(cur$directional_Zsum, cur$SLC3A2)
+cor(cur$directional_Zsum, cur$SLC7A11)
 
 ```
-### 96 gene signature for Overall Survival ( split by mean)
+### Correlation of elife score with 306 gene score
+Correlation b/t scores is poor (<.1)
+Different samples are in the high scoring groups of both scores. Only 7/25 samples are in the high scoring groups of both
 ```{r}
 
-# Quantiles of EFS time
-q <- quantile(nbl$dinu_stime, na.rm = T)
-
 # Define comparison
-nbl$comp <- ifelse(nbl$dinu_stime >= q[3], 'Long OS', 'Short OS')
-dat <- nbl %>% dplyr::filter(!is.na(dinu_stime))
+nbl$comp <- 'all'
 
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig96_up, 
-  DOWNGENES = sig96_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 't.test',
-  TITLE = '96 gene sig')
-
-```
-### 96 gene signature for Overall Survival ( split by quartile )
-```{r}
-
-# get quartiles
-q <- quantile(nbl$dinu_stime, na.rm = T)
-
-# Define comparison
-nbl$comp <- ifelse(nbl$dinu_stime >= q[3], '3', '2')
-nbl$comp <- ifelse(nbl$dinu_stime >= q[4], '4', nbl$comp)
-nbl$comp <- ifelse(nbl$dinu_stime < q[2], '1', nbl$comp)
-dat <- nbl %>% dplyr::filter(!is.na(dinu_stime))
-
-
-# plot PCA and boxplots
-make_plots(
-  DF = dat,
-  UPGENES = sig96_up, 
-  DOWNGENES = sig96_dn, 
+# get elife values
+cur <- make_plots(
+  DF = nbl,
+  UPGENES = elife_up, 
+  DOWNGENES = elife_down, 
   COMP = 'comp', 
   TIMEPOINT = 'all', 
   STAT_TEST = 'anova',
-  TITLE = '96 gene sig')
+  TITLE = 'elife gene sig')
+cur <- cur[[1]]
+cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>% set_colnames(c('rlib', 'elife.ss', 'elife.zsum'))
+
+# get sig306 values
+temp <- make_plots(
+  DF = nbl,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'anova',
+  TITLE = 'elife gene sig')
+temp <- temp[[1]]
+temp %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>% set_colnames(c('rlib', 'sig306.ss', 'sig306.zsum'))
+
+# merge
+cur %<>% merge(., temp, by = 'rlib')
+
+# Check correlation
+cor(cur$elife.ss, cur$sig306.ss)
+cor(cur$elife.zsum, cur$sig306.zsum)
+
+# See if they identify the same samples as high scoring
+cur %<>% 
+  mutate(elife_sub = ifelse(elife.ss >= quantile(elife.ss)[4], 'elife_hi', 'elife_lo')) %>%
+  mutate(sig306_sub = ifelse(sig306.ss >= quantile(sig306.ss)[4], 'sig306_hi', 'sig306_lo'))
+table(cur$elife_sub, cur$sig306_sub)
 
 ```
+### Elife gene signature LR/IR/HR
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$group
+
+# get PCA and boxplots
+cur <- make_plots(
+  DF = nbl,
+  UPGENES = elife_up, 
+  DOWNGENES = elife_down, 
+  COMP = 'comp', 
+  TIMEPOINT = 'dxprim', 
+  STAT_TEST = 'anova',
+  TITLE = 'elife gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
+cur <- cur[[1]]
+
+# select HR and group into 2 subgroups seen
+cur %<>% dplyr::filter(comp == 'HR') %>%
+  mutate(subset = ifelse(ss.TotalScore >= -.1, 'sub_hi', 'sub_lo'))
+
+# table vars of interest - proportions
+prop.table(table(cur$subset, cur$timepoint), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
+prop.table(table(cur$subset, cur$dinuresp_old), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
+prop.table(table(cur$subset, cur$dinu_treat_prepost), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
+prop.table(table(cur$subset, cur$site), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
+
+# Raw values
+table(cur$dinu_treat_prepost, cur$subset) %>% barplot(beside=T, legend=rownames(.))
+
+
+```
+### Elife gene signature for Dinutuxumab response among HR (1/2/3/4)
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$dinuresp_old
+dat <- nbl %>% dplyr::filter(!comp %in% c('nothr', 'pending'))
+
+# plot PCA and boxplots
+make_plots(
+  DF = dat,
+  UPGENES = elife_up, 
+  DOWNGENES = elife_down, 
+  COMP = 'comp', 
+  TIMEPOINT = 'dxprim', 
+  STAT_TEST = 'anova',
+  TITLE = 'ELIFE gene sig')
+
+```
+### 306 gene signature for Dinutuxumab response pre/post Dinituximab
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$dinu_treat_prepost
+dat <- nbl %>% dplyr::mutate(comp = ifelse(!comp %in% c('postDIN', 'preDIN'), 'noDIN', comp))
+
+# plot PCA and boxplots
+make_plots(
+  DF = dat,
+  UPGENES = elife_up, 
+  DOWNGENES = elife_down, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'anova',
+  TITLE = 'ELIFE gene sig')
+
+```
+### Kaplan meijer for OS
+```{r}
+
+# Filter dat for those with OS scores, keeping non-duplicate patients
+dat <- nbl %>% 
+  # remove those w/o times
+  dplyr::filter(!is.na(dinu_stime)) %>%
+  # for duplicate preferentially keep the dxprims (doesn't really matter since all have same survival time vals)
+  dplyr::mutate(timepoint = factor(timepoint, levels = c('dxprim', 'dx2prim', 'dxmet', 'posttx', 'rel_ref', 'pending'))) %>%
+  arrange(timepoint) %>%
+  dplyr::filter(!duplicated(patient))
+
+# get sigscores for stratifying in kaplan meijer curve
+cur <- make_plots(
+  DF = dat,
+  UPGENES = elife_up, 
+  DOWNGENES = elife_down, 
+  COMP = 'comp', 
+  TIMEPOINT = 'dxprim', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+cur <- cur[[1]]
+
+# stratify by quartile 
+cur %<>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
+
+# stratify by visual cutoff
+cur %<>% mutate(comp = ifelse(ss.TotalScore > 0, 'hi', 'lo'))
+
+# plot Kaplan meijer
+km_fit <- survfit(Surv(dinu_stime, rep(1, length(dat$rlib))) ~ comp, data=cur)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit)
+
+```
+### Kaplan meijer for EFS
+```{r}
+
+# Filter dat for those with OS scores, keeping non-duplicate patients
+dat <- nbl %>% 
+  # remove those w/o times
+  dplyr::filter(!is.na(dinu_efstime)) %>%
+  # for duplicate preferentially keep the dxprims (doesn't really matter since all have same survival time vals)
+  dplyr::mutate(timepoint = factor(timepoint, levels = c('dxprim', 'dx2prim', 'dxmet', 'posttx', 'rel_ref', 'pending'))) %>%
+  arrange(timepoint) %>%
+  dplyr::filter(!duplicated(patient))
+
+# get sigscores for stratifying in kaplan meijer curve
+cur <- make_plots(
+  DF = dat,
+  UPGENES = elife_up, 
+  DOWNGENES = elife_down, 
+  COMP = 'comp', 
+  TIMEPOINT = 'dxprim', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+cur <- cur[[1]]
+
+# stratify by quartile 
+cur %<>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
+
+# stratify by visual cutoff
+cur %<>% mutate(comp = ifelse(ss.TotalScore > 0, 'hi', 'lo'))
+
+# plot Kaplan meijer
+km_fit <- survfit(Surv(dinu_efstime, rep(1, length(dat$rlib))) ~ comp, data=cur)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit)
+
+```
+
+
+
 
 
 
