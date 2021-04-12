@@ -51,7 +51,7 @@ library(survival)
 ```{r}
 
 # Load RNA-seq counts
-nbl <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/nbl_cohort/release/ForRyan/nbl_expression-cts.csv', data.table = F)
+nbl <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/nbl_cohort/release/v1/nbl_expression-tpm.csv', data.table = F)
 
 # Remove any duplicate gene_ids so can transpose matrix
 ## View duplicate common gene_ids
@@ -137,8 +137,20 @@ calculate_signature_scores <- function(nbl_df = nbl, upGenes, downGenes, metacol
   # Score samples using singScore and merge
   ## score
   rankData <- cnts %>% dplyr::select(-metacols) %>%  t() %>% rankGenes()
-  scoredf <- simpleScore(rankData, upSet = upGenes, downSet = downGenes)
-  colnames(scoredf) <- paste0('ss.', colnames(scoredf))
+  if(!is.null(upGenes) & !is.null(downGenes)){
+    scoredf <- simpleScore(rankData, upSet = upGenes, downSet = downGenes)
+  } else if(is.null(upGenes) & !is.null(downGenes)) {
+    scoredf <- simpleScore(rankData, downSet = downGenes)
+    print('Only DOWN geneset is valid')
+  } else if(!is.null(upGenes) & is.null(downGenes)) {
+    scoredf <- simpleScore(rankData, upSet = upGenes)
+    print('Only UP geneset is valid')
+  } else {
+    print('Both gene sets NULL')
+    break
+  }
+  nms <- paste0('ss.', colnames(scoredf))
+  colnames(scoredf) <- nms
   ## merge SingScore Total score with tmp df
   cnts <- merge(cnts, scoredf, by = 0)
   
@@ -153,18 +165,25 @@ calculate_signature_scores <- function(nbl_df = nbl, upGenes, downGenes, metacol
   # Calculate directional Z scores
   ## Upregulated genes
   temp <- apply(cnts %>% dplyr::select(all_of(upGenes)), 2, scale)
-  temp$upZsum <- rowSums(temp)
-  ## Add Z score to dataframe 
-  cnts$upZsum <- temp$upZsum
+  if(!is_empty(temp)) {
+    temp$upZsum <- rowSums(temp)
+    ## Add Z score to dataframe 
+    cnts$upZsum <- temp$upZsum
+  } else {
+    cnts$upZsum <- 0
+  }
   ## Downregulated genes
   temp <- apply(cnts %>% dplyr::select(all_of(downGenes)), 2, scale)
-  temp$downZsum <- rowSums(temp)
-  ## Add Z score to dataframe 
-  cnts$downZsum <- temp$downZsum
-  
+  if(!is_empty(temp)) {
+    temp$downZsum <- rowSums(temp)
+    ## Add Z score to dataframe 
+    cnts$downZsum <- temp$downZsum
+  } else {
+    cnts$downZsum <- 0
+  }
   
   # Select columns
-  cnts %<>% dplyr::select(metacols, ss.TotalScore:ss.DownDispersion, upZsum, downZsum)
+  cnts %<>% dplyr::select(metacols, all_of(nms), upZsum, downZsum)
   cnts %<>% mutate(directional_Zsum = upZsum + (downZsum * -1)) %>%
     dplyr::select(-Row.names)
   
@@ -319,6 +338,61 @@ cor(cur$ss.TotalScore, cur$SLC3A2)
 cor(cur$ss.TotalScore, cur$SLC7A11)
 cor(cur$directional_Zsum, cur$SLC3A2)
 cor(cur$directional_Zsum, cur$SLC7A11)
+
+```
+### Correlation with NK cell infiltration
+NK gene signature taken from https://cancerimmunolres.aacrjournals.org/content/7/7/1162. Paper by same authors of singscore. 
+```{r}
+
+# Define comparison
+nbl$comp <- 'all'
+
+# get NK cell gene signature
+nk <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.1158_2326-6966.CIR-18-0500_NKcellGeneSig/s1.txt', data.table = F, skip = 2)
+nk %<>% dplyr::select(`HGNC Symbol`, `Cursons\nGuimaraes\nsigGene`, logFC) %>%
+  set_colnames(c('gene', 'sig', 'logfc'))
+## upregulated
+nk_up <- nk %>% dplyr::filter(logfc > 0) %>%
+  dplyr::filter(sig == T) %>%
+  dplyr::select(gene) %>%
+  unlist()
+
+# Obtain nk cell gene signature scores across NBL samples
+cur <- make_plots(
+  DF = nbl,
+  UPGENES = nk_up, 
+  DOWNGENES = NULL, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'anova',
+  TITLE = 'NK gene sig')
+cur[[3]]
+nk.ss <- cur[[1]]
+nk.ss %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
+  set_colnames(c('rlib', 'nk.ss.TotalScore', 'nk.directional_Zsum'))
+
+# get sig306 gene sig
+cur <- make_plots(
+  DF = nbl,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+
+# Look at correlation of singscore with SLC levels
+cur <- cur[[1]]
+cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
+  merge(., nk.ss, by = 'rlib')
+cor(cur$ss.TotalScore, cur$nk.ss.TotalScore)
+
+
+
+
+
+
+
 
 
 ```
