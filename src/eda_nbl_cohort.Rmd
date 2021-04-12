@@ -41,6 +41,7 @@ library('ggpubr')
 library('ggfortify')
 library('cowplot')
 library(survival)
+library(matrixStats)
 
 ```
 
@@ -111,6 +112,47 @@ nbl %<>% dplyr::select(rlib:MYCN.cycle, comp, genTime, ARF5:AC106791.3)
 
 
 ```
+
+
+
+# General QC of NBL cohort
+
+### PCA by sample origin
+```{r}
+
+# All genes
+set.seed(11)
+nbl$comp <- nbl$cohort
+dat <- nbl %>% dplyr::select(comp, ARF5:AC106791.3)
+autoplot(dat %>% dplyr::select(-comp) %>% prcomp(),
+              data = dat,
+              colour = 'comp',
+              main = paste0('PCA of all genes split by cohort')) +
+  theme_cowplot(12)
+
+# PCA using top 25% most variable genes
+## get most variable features
+comp <- nbl$comp
+dat <- nbl %>% 
+  dplyr::select(ARF5:AC106791.3) %>% 
+  t() %>% 
+  as.data.frame()
+dat %<>% mutate(sd = rowSds(as.matrix(.), na.rm = T)) %>%
+  dplyr::filter(sd > quantile(sd)[4]) %>%
+  dplyr::select(-sd) %>%
+  t() %>%
+  as.data.frame() %>%
+  cbind(comp, .)
+## plot
+set.seed(11)
+autoplot(dat %>% dplyr::select(-comp) %>% prcomp(),
+              data = dat,
+              colour = 'comp',
+              main = paste0('PCA of 25% most variable genes split by cohort')) +
+  theme_cowplot(12)
+
+```
+
 
 
 # Create functions neeed to analyze gene signatures
@@ -330,15 +372,47 @@ cur <- make_plots(
 
 # Plot distribution of sing score
 cur[3]
+cur[4]
 
 # Look at correlation of singscore with SLC levels
 cur <- cur[[1]]
 cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
   merge(., nbl, by = 'rlib')
-cor(cur$ss.TotalScore, cur$SLC3A2)
-cor(cur$ss.TotalScore, cur$SLC7A11)
-cor(cur$directional_Zsum, cur$SLC3A2)
-cor(cur$directional_Zsum, cur$SLC7A11)
+
+# singScore with SLC3A2 expression
+ggscatter(cur, x='ss.TotalScore', y='SLC3A2',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# singScore with SLC7A11
+ggscatter(cur, x='ss.TotalScore', y='SLC7A11',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# Directional Z sum with SLC3A2
+ggscatter(cur, x='directional_Zsum', y='SLC3A2',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# singScore with SLC7A11
+ggscatter(cur, x='directional_Zsum', y='SLC7A11',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# SLC7A11 vs SLC3A2
+ggscatter(cur, x='SLC3A2', y='SLC7A11',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
 
 ```
 ### Correlation with NK cell infiltration
@@ -382,11 +456,16 @@ cur <- make_plots(
   STAT_TEST = 'anova',
   TITLE = '306 gene sig')
 
-# Look at correlation of singscore with SLC levels
+# Look at correlation of singscore with NK score levels
 cur <- cur[[1]]
 cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
   merge(., nk.ss, by = 'rlib')
-cor(cur$ss.TotalScore, cur$nk.ss.TotalScore)
+
+ggscatter(cur, x='ss.TotalScore', y='nk.ss.TotalScore',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
 
 
 ```
@@ -503,7 +582,7 @@ nbl$comp <- nbl$dinuresp_old
 dat <- nbl %>% dplyr::filter(!comp %in% c('nothr', 'pending'))
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = dat,
   UPGENES = sig306_up, 
   DOWNGENES = sig306_dn, 
@@ -511,6 +590,11 @@ make_plots(
   TIMEPOINT = 'dxprim', 
   STAT_TEST = 'anova',
   TITLE = '306 gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 ### 306 gene signature for Dinutuxumab response among HR (1/234)
@@ -522,7 +606,7 @@ nbl %<>% mutate(comp = ifelse(comp %in% c('group2', 'group3', 'group4'), 'group2
 dat <- nbl %>% dplyr::filter(!comp %in% c('pending'))
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = dat,
   UPGENES = sig306_up, 
   DOWNGENES = sig306_dn, 
@@ -530,6 +614,11 @@ make_plots(
   TIMEPOINT = 'dxprim', 
   STAT_TEST = 'anova',
   TITLE = '306 gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 ### 306 gene signature for Dinutuxumab response pre/post Dinituximab
@@ -540,7 +629,7 @@ nbl$comp <- nbl$dinu_treat_prepost
 dat <- nbl %>% dplyr::mutate(comp = ifelse(!comp %in% c('postDIN', 'preDIN'), 'noDIN', comp))
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = dat,
   UPGENES = sig306_up, 
   DOWNGENES = sig306_dn, 
@@ -548,6 +637,11 @@ make_plots(
   TIMEPOINT = 'all', 
   STAT_TEST = 'anova',
   TITLE = '306 gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 ### 306 gene signature for Dinutuxumab response pre/post Dinituximab split by Dinitux_response
@@ -737,7 +831,7 @@ cor(cur$directional_Zsum, cur$SLC7A11)
 nbl$comp <- nbl$group
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = nbl,
   UPGENES = sig63_up, 
   DOWNGENES = sig63_dn, 
@@ -745,6 +839,11 @@ make_plots(
   TIMEPOINT = 'dxprim', 
   STAT_TEST = 'anova',
   TITLE = '63 gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 ### 63 gene signature for Dinutuxumab response among HR
@@ -755,7 +854,7 @@ nbl$comp <- nbl$dinuresp_old
 dat <- nbl %>% dplyr::filter(!comp %in% c('nothr', 'pending'))
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = dat,
   UPGENES = sig63_up, 
   DOWNGENES = sig63_dn, 
@@ -763,6 +862,11 @@ make_plots(
   TIMEPOINT = 'dxprim', 
   STAT_TEST = 'anova',
   TITLE = '63 gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 ### 63 gene signature for Dinutuxumab response pre/post Dinituximab
@@ -773,7 +877,7 @@ nbl$comp <- nbl$dinu_treat_prepost
 dat <- nbl %>% dplyr::filter(comp %in% c('postDIN', 'preDIN'))
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = dat,
   UPGENES = sig63_up, 
   DOWNGENES = sig63_dn, 
@@ -781,6 +885,11 @@ make_plots(
   TIMEPOINT = 'all', 
   STAT_TEST = 't.test',
   TITLE = '63 gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 
@@ -842,7 +951,7 @@ cor(cur$directional_Zsum, cur$SLC7A11)
 nbl$comp <- nbl$group
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = nbl,
   UPGENES = sig46_up, 
   DOWNGENES = sig46_dn, 
@@ -850,6 +959,11 @@ make_plots(
   TIMEPOINT = 'dxprim', 
   STAT_TEST = 'anova',
   TITLE = '46 gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 ### 46 gene signature for Dinutuxumab response among HR
@@ -860,7 +974,7 @@ nbl$comp <- nbl$dinuresp_old
 dat <- nbl %>% dplyr::filter(!comp %in% c('nothr', 'pending'))
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = dat,
   UPGENES = sig46_up, 
   DOWNGENES = sig46_dn, 
@@ -868,6 +982,11 @@ make_plots(
   TIMEPOINT = 'dxprim', 
   STAT_TEST = 'anova',
   TITLE = '46 gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 ### 46 gene signature for Dinutuxumab response pre/post Dinituximab
@@ -878,7 +997,7 @@ nbl$comp <- nbl$dinu_treat_prepost
 dat <- nbl %>% dplyr::filter(comp %in% c('postDIN', 'preDIN'))
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = dat,
   UPGENES = sig46_up, 
   DOWNGENES = sig46_dn, 
@@ -886,6 +1005,11 @@ make_plots(
   TIMEPOINT = 'all', 
   STAT_TEST = 't.test',
   TITLE = '46 gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 
@@ -947,7 +1071,7 @@ cor(cur$directional_Zsum, cur$SLC7A11)
 nbl$comp <- nbl$group
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = nbl,
   UPGENES = sig96_up, 
   DOWNGENES = sig96_dn, 
@@ -955,6 +1079,11 @@ make_plots(
   TIMEPOINT = 'dxprim', 
   STAT_TEST = 'anova',
   TITLE = '96 gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 ### 96 gene signature for Dinutuxumab response among HR
@@ -965,7 +1094,7 @@ nbl$comp <- nbl$dinuresp_old
 dat <- nbl %>% dplyr::filter(!comp %in% c('nothr', 'pending'))
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = dat,
   UPGENES = sig96_up, 
   DOWNGENES = sig96_dn, 
@@ -973,6 +1102,11 @@ make_plots(
   TIMEPOINT = 'dxprim', 
   STAT_TEST = 'anova',
   TITLE = '96 gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 ### 96 gene signature for Dinutuxumab response pre/post Dinituximab
@@ -983,7 +1117,7 @@ nbl$comp <- nbl$dinu_treat_prepost
 dat <- nbl %>% dplyr::filter(comp %in% c('postDIN', 'preDIN'))
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = dat,
   UPGENES = sig96_up, 
   DOWNGENES = sig96_dn, 
@@ -991,6 +1125,11 @@ make_plots(
   TIMEPOINT = 'all', 
   STAT_TEST = 't.test',
   TITLE = '96 gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 
@@ -1074,8 +1213,18 @@ temp %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>% set_colnames(
 cur %<>% merge(., temp, by = 'rlib')
 
 # Check correlation
-cor(cur$elife.ss, cur$sig306.ss)
-cor(cur$elife.zsum, cur$sig306.zsum)
+## singscore elife vs singscore 306
+ggscatter(cur, x='elife.ss', y='sig306.ss',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+## directional zsum elife vs directional zsum sig306
+ggscatter(cur, x='elife.zsum', y='sig306.zsum',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
 
 # See if they identify the same samples as high scoring
 cur %<>% 
@@ -1197,7 +1346,7 @@ nbl$comp <- nbl$dinuresp_old
 dat <- nbl %>% dplyr::filter(!comp %in% c('nothr', 'pending'))
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = dat,
   UPGENES = elife_up, 
   DOWNGENES = elife_down, 
@@ -1205,6 +1354,11 @@ make_plots(
   TIMEPOINT = 'dxprim', 
   STAT_TEST = 'anova',
   TITLE = 'ELIFE gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 ### 306 gene signature for Dinutuxumab response pre/post Dinituximab
@@ -1215,7 +1369,7 @@ nbl$comp <- nbl$dinu_treat_prepost
 dat <- nbl %>% dplyr::mutate(comp = ifelse(!comp %in% c('postDIN', 'preDIN'), 'noDIN', comp))
 
 # plot PCA and boxplots
-make_plots(
+cur <- make_plots(
   DF = dat,
   UPGENES = elife_up, 
   DOWNGENES = elife_down, 
@@ -1223,6 +1377,11 @@ make_plots(
   TIMEPOINT = 'all', 
   STAT_TEST = 'anova',
   TITLE = 'ELIFE gene sig')
+
+# plot and get df
+cur[2]
+cur[3]
+cur[4]
 
 ```
 ### Kaplan meijer for OS
