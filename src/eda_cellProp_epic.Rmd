@@ -83,6 +83,12 @@ temp <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/nbl_c
 prop <- merge(temp, epic$cellFractions, by.x = 'rlib', by.y = 0)
 prop.sub <- merge(temp, epic.sub$cellFractions, by.x = 'rlib', by.y = 0)
 
+# save 
+write.table(prop, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/EPIC/NBL/cell_proportions/nbl_epic_proportions_all.txt',
+            row.names = F, col.names = T, sep = '\t', quote = F)
+write.table(prop.sub, '/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/EPIC/NBL/cell_proportions/nbl_epic_proportions_sub.txt',
+            row.names = F, col.names = T, sep = '\t', quote = F)
+
 ```
 #### Select samples needed from full epic set
 Started with 146 samples.
