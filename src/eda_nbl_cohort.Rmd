@@ -258,7 +258,7 @@ make_plots <- function(
   
   # Plot 
   b1 <- scores %>% ggplot(aes(x=get(COMP), y=ss.TotalScore)) + 
-    geom_boxplot() +
+    geom_boxplot(outlier.shape = NA) +
     geom_jitter(alpha=0.6, width=0.15) +
     theme_bw(base_size=16) +
     labs(subtitle=paste0("SingScore by Risk group in dxprim: ", TITLE)) +
@@ -276,7 +276,7 @@ make_plots <- function(
   
   # Plot 
   b3 <- scores %>% ggplot(aes(x=get(COMP), y=directional_Zsum)) +
-    geom_boxplot() +
+    geom_boxplot(outlier.shape = NA) +
     geom_jitter(alpha=0.6, width=0.15) +
     theme_bw(base_size=16) +
     labs(subtitle=paste0("Directional Z score by Risk group in dxprim: ", TITLE)) +
@@ -288,6 +288,7 @@ make_plots <- function(
 }
 
 ```
+
 
 
 # Analyze gene signatures 
@@ -388,11 +389,72 @@ cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
 cor(cur$ss.TotalScore, cur$nk.ss.TotalScore)
 
 
+```
+### Correlation with T cell proportion
+```{r}
+
+# Load T cell data
+epic <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/EPIC/NBL/cell_proportions/nbl_epic_proportions_all.txt', data.table = F) %>%
+  dplyr::select(rlib, Bcells:otherCells)
+tcr <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/nbl_cohort/other/nbl-crisp-canio_tcr-summary.csv', data.table = F)
 
 
+# Load gene sig scores
+cur <- make_plots(
+  DF = nbl,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+cur <- cur[[1]]
 
+# Combine T cell data with gene signature 
+comb <- unique(merge(cur, epic, by = 'rlib', all.x = T))
+comb <- merge(comb, tcr, by.x = 'rlib', by.y='sid', all.x=T)
 
+# T cell clones
+ggscatter(comb, x='ss.TotalScore', y='clones_T',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
 
+# B cell clones
+ggscatter(comb, x='ss.TotalScore', y='clones_B',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# T cell Gini
+ggscatter(comb, x='ss.TotalScore', y='gini_T',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# B cell Gini
+ggscatter(comb, x='ss.TotalScore', y='gini_B',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# CD4
+ggscatter(comb, x='ss.TotalScore', y='CD4_Tcells',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# CD8
+ggscatter(comb, x='ss.TotalScore', y='CD8_Tcells',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
 
 
 ```
@@ -504,7 +566,7 @@ scores <- calculate_signature_scores(nbl_df = dat,
 scores %<>% dplyr::filter(dinuresp_old != 'pending') %>%
   mutate(dinuresp_old = ifelse(dinuresp_old %in% c('group2', 'group3', 'group4'), 'group234', dinuresp_old))
 scores %>% ggplot(., aes(x=comp, y=ss.TotalScore, color=dinuresp_old)) + 
-  geom_boxplot(color='black') +
+  geom_boxplot(color='black', outlier.shape = NA) +
   geom_jitter(alpha=0.6, width=0.15) +
   theme_bw(base_size=16) +
   labs(subtitle="SingScore: Biopsy time with response group") +
@@ -542,7 +604,7 @@ cur %<>%
 cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
 
 # stratify by visual cutoff
-cur %<>% mutate(comp = ifelse(ss.TotalScore > -0.05, 'hi', 'lo'))
+#cur %<>% mutate(comp = ifelse(ss.TotalScore > -0.05, 'hi', 'lo'))
 
 # plot Kaplan meijer
 km_fit <- survfit(Surv(dinu_stime, rep(1, length(dat$rlib))) ~ comp, data=cur)
@@ -581,7 +643,7 @@ cur %<>%
 cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
 
 # stratify by visual cutoff
-cur %<>% mutate(comp = ifelse(ss.TotalScore > -0.05, 'hi', 'lo'))
+#cur %<>% mutate(comp = ifelse(ss.TotalScore > -0.05, 'hi', 'lo'))
 
 # plot Kaplan meijer
 km_fit <- survfit(Surv(dinu_efstime, rep(1, length(dat$rlib))) ~ comp, data=cur)
@@ -978,7 +1040,7 @@ cor(cur$directional_Zsum, cur$SLC7A11)
 ```
 ### Correlation of elife score with 306 gene score
 Correlation b/t scores is poor (<.1)
-Different samples are in the high scoring groups of both scores. Only 7/25 samples are in the high scoring groups of both
+Different samples are in the high scoring groups of both scores. Only 11/25 samples are in the high scoring groups of both
 ```{r}
 
 # Define comparison
@@ -1020,6 +1082,74 @@ cur %<>%
   mutate(elife_sub = ifelse(elife.ss >= quantile(elife.ss)[4], 'elife_hi', 'elife_lo')) %>%
   mutate(sig306_sub = ifelse(sig306.ss >= quantile(sig306.ss)[4], 'sig306_hi', 'sig306_lo'))
 table(cur$elife_sub, cur$sig306_sub)
+
+```
+### Correlation with T cell proportion
+```{r}
+
+# Load T cell data
+epic <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/EPIC/NBL/cell_proportions/nbl_epic_proportions_all.txt', data.table = F) %>%
+  dplyr::select(rlib, Bcells:otherCells)
+tcr <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/nbl_cohort/other/nbl-crisp-canio_tcr-summary.csv', data.table = F)
+
+
+# Load gene sig scores
+cur <- make_plots(
+  DF = nbl,
+  UPGENES = elife_up, 
+  DOWNGENES = elife_down, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+cur <- cur[[1]]
+
+# Combine T cell data with gene signature 
+comb <- unique(merge(cur, epic, by = 'rlib', all.x = T))
+comb <- merge(comb, tcr, by.x = 'rlib', by.y='sid', all.x=T)
+
+# T cell clones
+ggscatter(comb, x='ss.TotalScore', y='clones_T',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# B cell clones
+ggscatter(comb, x='ss.TotalScore', y='clones_B',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# T cell Gini
+ggscatter(comb, x='ss.TotalScore', y='gini_T',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# B cell Gini
+ggscatter(comb, x='ss.TotalScore', y='gini_B',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# CD4
+ggscatter(comb, x='ss.TotalScore', y='CD4_Tcells',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# CD8
+ggscatter(comb, x='ss.TotalScore', y='CD8_Tcells',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
 
 ```
 ### Elife gene signature LR/IR/HR
@@ -1123,10 +1253,10 @@ cur %<>%
   mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
   mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
   mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
-cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
+cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, comp))
 
 # stratify by visual cutoff
-cur %<>% mutate(comp = ifelse(ss.TotalScore > 0, 'hi', 'lo'))
+#cur %<>% mutate(comp = ifelse(ss.TotalScore > -0.12, 'hi', 'lo'))
 
 # plot Kaplan meijer
 km_fit <- survfit(Surv(dinu_stime, rep(1, length(dat$rlib))) ~ comp, data=cur)
@@ -1165,7 +1295,7 @@ cur %<>%
 cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
 
 # stratify by visual cutoff
-cur %<>% mutate(comp = ifelse(ss.TotalScore > 0, 'hi', 'lo'))
+#cur %<>% mutate(comp = ifelse(ss.TotalScore > 0, 'hi', 'lo'))
 
 # plot Kaplan meijer
 km_fit <- survfit(Surv(dinu_efstime, rep(1, length(dat$rlib))) ~ comp, data=cur)
@@ -1173,6 +1303,49 @@ summary(km_fit, times = c(1,30,60,90*(1:10)))
 autoplot(km_fit)
 
 ```
+
+
+
+# Look at expression of cell markers
+
+### NK cell marker expression
+```{r}
+
+# get NK cell genes from literature
+nk <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.1158_2326-6966.CIR-18-0500_NKcellGeneSig/s1.txt', data.table = F, skip = 2)
+nk %<>% dplyr::select(`HGNC Symbol`, `Cursons\nGuimaraes\nsigGene`, logFC) %>%
+  set_colnames(c('gene', 'sig', 'logfc'))
+## upregulated
+nk_up <- nk %>% dplyr::filter(logfc > 0) %>%
+  dplyr::filter(sig == T) %>%
+  dplyr::select(gene) %>%
+  unlist() %>%
+  set_names(NULL)
+
+
+# select variables needed for plot and format properly
+toPlot <- nbl %>% 
+  mutate(comp = ifelse(dinu_treat_prepost == '', 'none', dinu_treat_prepost)) %>%
+  dplyr::select(comp, all_of(nk_up)) %>%
+  gather(., gene, expression, CD160:XCL2) %>%
+  mutate(log10exp = log10(expression+0.001))
+
+# Plot 
+toPlot %>% ggplot(aes(x=gene, y=log10exp)) + 
+    geom_boxplot(outlier.shape = NA, color='black') +
+    geom_jitter(alpha=0.6, width=0.15) +
+    theme_bw(base_size=16) +
+    labs(subtitle='NK cell gene expresion (TPM)') +
+    xlab(NULL) +
+    ylab('log10(exp + 0.001)') +
+    theme(axis.text.x = element_text(angle = 90))
+
+
+```
+
+
+
+
 
 
 
