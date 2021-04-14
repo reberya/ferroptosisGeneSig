@@ -175,13 +175,14 @@ plotMA(resLFC, ylim=c(-2,2), main = 'MA-plot Shrunken LFCs')
 
 # PCA
 dat <- as.data.frame(t(txi.kallisto$counts))
-dat$group <- c(rep("MDAMB231", 2), rep("MDAMB231_ML162", 3))
+dat$group <- factor(c(rep("Cntrl", 2), rep("ML162+", 3)), levels = c('Cntrl', 'ML162+'))
 dat$sample <- rownames(dat)
 autoplot(dat %>% dplyr::select(-group, -sample) %>% prcomp(),
          data = dat,
          colour = 'group',
          size = 6) +
-  theme_cowplot(12)
+  theme_cowplot(12) +
+  theme(legend.text=element_text(size=20))
 
 ```
 
