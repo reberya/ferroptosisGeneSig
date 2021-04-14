@@ -633,6 +633,7 @@ topGenes <- c('CHAC1', 'DDIT4', 'LOC284561', 'ASNS', 'TSC22D3', 'DDIT3', 'JDP2',
               'KLHL24', 'TRIB3', 'ZNF643', 'ATP6V1G2', 'VEGFA', 'GDF15', 'TUBE1', 
               'ARRDC3', 'CEBPG', 'SNORA16A', 'RGS4', 'MUTED-TXNDC5', 'LOC390705')
 
+table(topGenes %in% clue.erastin$pr_gene_symbol)
 table(topGenes %in% rownames(sig_24h))
 table(topGenes %in% rownames(sig_24h_sub))
 
