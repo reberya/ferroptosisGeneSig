@@ -289,6 +289,22 @@ make_plots <- function(DF = prop.sub,
 
 ```
 
+### All samples
+```{r}
+
+# Define comparison
+prop$comp <- rep('all', length(prop$rlib))
+
+# plot boxplots
+make_plots(DF = prop,
+           COMP='comp', 
+           TIMEPOINT = 'all', 
+           STAT_TEST = 'anova',
+           COMPARISON_TITLE = 'All samples')
+
+```
+
+
 #### LR vs IR vs HR 
 ```{r}
 
