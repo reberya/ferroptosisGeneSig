@@ -1,7 +1,7 @@
 ---
-title: "eda_TCGA_Colon_cancer_ferroptosis"
+title: "eda_TCGA_melanoma_ferroptosis"
 author: "Ryan Rebernick"
-date: "4/14/2021"
+date: "4/15/2021"
 output: html_document
 ---
 
@@ -10,6 +10,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Description:
+
+
 
 # Load packages
 ```{r, warning=F, message=FALSE}
@@ -30,7 +32,6 @@ library('cowplot')
 library(survival)
 library(matrixStats)
 library(biomaRt)
-library(EPIC)
 
 ```
 
@@ -38,13 +39,13 @@ library(EPIC)
 ```{r}
 
 # fpkm
-fpkm <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/ucsc_xena/datasets/GDC_TCGA_Colon_cancer_COAD/TCGA-COAD.htseq_fpkm.tsv', data.table = F)
+fpkm <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/ucsc_xena/datasets/GDC_TCGA_Melanoma_SKCM/TCGA-SKCM.htseq_fpkm.tsv', data.table = F)
 
 # phenotypic data
-pheno <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/ucsc_xena/datasets/GDC_TCGA_Colon_cancer_COAD/TCGA-COAD.GDC_phenotype.tsv', data.table = F)
+pheno <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/ucsc_xena/datasets/GDC_TCGA_Melanoma_SKCM/TCGA-SKCM.GDC_phenotype.tsv', data.table = F)
 
 # survival data
-surv <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/ucsc_xena/datasets/GDC_TCGA_Colon_cancer_COAD/TCGA-COAD.survival.tsv', data.table = F)
+surv <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/ucsc_xena/datasets/GDC_TCGA_Melanoma_SKCM/TCGA-SKCM.survival.tsv', data.table = F)
 
 ```
 
@@ -77,7 +78,11 @@ fpkm$Ensembl_ID <- gsub('\\.[0-9]*', '', fpkm$Ensembl_ID)
 # merge with common names
 fpkm <- merge(key, fpkm, by.x = 'ensembl_gene_id', by.y='Ensembl_ID')
 
-# remove duplicate genes
+# determine if duplicates are in gene signature
+sig306 <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/gene_signatures/erastin_clue24h_gse104462_306genes.txt',data.table = F)
+table(fpkm$external_gene_name[duplicated(fpkm$external_gene_name)] %in% sig306$V1)
+
+# remove duplicate genes since not in gene signature
 fpkm <- fpkm[!duplicated(fpkm$external_gene_name),]
 
 # set genes as rownames
@@ -104,8 +109,8 @@ fpkm %<>% dplyr::filter(quart2 > 0) %>%
 # merge phenotypic and fpkm data
 temp <- fpkm %>% t() %>% as.data.frame() %>% cbind(comp = 'ALL', .)
 
-coad <- merge(pheno, surv, by.x = 'submitter_id.samples', by.y='sample')
-coad <- merge(coad, temp, by.x = 'submitter_id.samples', by.y=0)
+skcm <- merge(pheno, surv, by.x = 'submitter_id.samples', by.y='sample')
+skcm <- merge(skcm, temp, by.x = 'submitter_id.samples', by.y=0)
 
 ```
 
@@ -123,10 +128,10 @@ epic <- EPIC(bulk = fpkm,
 
 
 # Merge dataframes for downstream use
-coad <- merge(coad, epic$cellFractions, by.x = 'submitter_id.samples', by.y = 0)
+skcm <- merge(skcm, epic$cellFractions, by.x = 'submitter_id.samples', by.y = 0)
 
 # Order dataframe
-coad %<>% set_rownames(coad$Row.names) %>%
+skcm %<>% set_rownames(skcm$Row.names) %>%
   dplyr::relocate(Bcells:otherCells, .after=OS.time)
 
 ```
@@ -138,35 +143,35 @@ There are duplicates with some patients having multiple tissue types (sample_typ
 Some patients have duplicate values of the same tissue types (patient = 2672). The difference between these samples is the variable is_ffpe.samples, whether the sample was taken ffpe or flash frozen. I stratified for taking samples that are flash frozen when possible.
 ```{r}
 
-table(coad$sample_type.samples)
+table(skcm$sample_type.samples)
 
 # arrange df to allow for easy duplicate removal
-coaduniq <- coad %>% 
+skcmuniq <- skcm %>% 
   ## set sample type to be a factor to allow for sorting
-  mutate(sample_type.samples = factor(coad$sample_type.samples, levels = c('Primary Tumor', 'Recurrent Tumor', 'Metastatic', 'Solid Tissue Normal'))) %>%
+  mutate(sample_type.samples = factor(skcm$sample_type.samples, levels = c('Primary Tumor', 'Recurrent Tumor', 'Metastatic', 'Solid Tissue Normal'))) %>%
   ## arrange based on sample type and whether ffpe
   arrange(sample_type.samples, is_ffpe.samples)
 
 # remove the duplicates based on sorting above
-coaduniq <- coaduniq[!duplicated(coaduniq$patient_id),]
+skcmuniq <- skcmuniq[!duplicated(skcmuniq$patient_id),]
 
 # verify patients and ffpe are uniform
-table(coaduniq$is_ffpe.samples)
-table(duplicated(coaduniq$patient_id))
+table(skcmuniq$is_ffpe.samples)
+table(duplicated(skcmuniq$patient_id))
 
 ```
 
 
 
-# General QC of COAD cohort
+# General QC of SKCM cohort
 
 ### PCA by sample origin
 ```{r}
 
 # All genes and all samples
 set.seed(11)
-coad$comp <- coad$sample_type.samples
-dat <- coad %>% dplyr::select(comp, TSPAN6:ncol(coad))
+skcm$comp <- skcm$sample_type.samples
+dat <- skcm %>% dplyr::select(comp, TSPAN6:ncol(skcm))
 autoplot(dat %>% dplyr::select(-comp) %>% prcomp(),
               data = dat,
               colour = 'comp',
@@ -382,11 +387,11 @@ sig306_dn <- sig306 %>%
 ```{r}
 
 # Define comparison
-coaduniq$comp <- 'all'
+skcmuniq$comp <- 'all'
 
 # get PCA and boxplots
 cur <- make_plots(
-  DF = coaduniq,
+  DF = skcmuniq,
   UPGENES = sig306_up, 
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
@@ -400,7 +405,7 @@ cur[4]
 # Look at correlation of singscore with SLC levels
 cur <- cur[[1]]
 cur %<>% dplyr::select(submitter_id.samples, ss.TotalScore, directional_Zsum) %>%
-  merge(., coaduniq, by = 'submitter_id.samples')
+  merge(., skcmuniq, by = 'submitter_id.samples')
 
 # singScore with SLC3A2 expression
 ggscatter(cur, x='ss.TotalScore', y='SLC3A2',
@@ -444,7 +449,7 @@ ggscatter(cur, x='SLC3A2', y='SLC7A11',
 
 # Load gene sig scores
 cur <- make_plots(
-  DF = coad,
+  DF = skcm,
   UPGENES = sig306_up, 
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
@@ -512,11 +517,66 @@ ggscatter(cur, x='ss.TotalScore', y='otherCells',
 
 ```
 
+### Examine variables by table fxn to help narrow down which are interesting
+discrete: history_of_neoadjuvant_treatment, submitted_tumor_location melanoma_ulceration_indicator
+continuous: breslow_depth_value
+```{r}
+
+# get sigscores 
+cur <- make_plots(
+  DF = skcmuniq,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+cur <- cur[[1]]
+
+# stratify by sigscores quartile 
+cur %<>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 'gs_quant_3', 'gs_quant_2')) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 'gs_quant_4', comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 'gs_quant_1', comp)) 
+
+
+# Discrete variables 
+disc <- c('history_of_neoadjuvant_treatment', 'lactate_dehydrogenase_result', 'prior_systemic_therapy_type', 
+          'submitted_tumor_location', 'melanoma_origin_skin_anatomic_site', 'prior_radiation_therapy', 'melanoma_ulceration_indicator')
+
+# loop through discrete variables
+for(x in disc){
+  print(x)
+  print(table(cur$comp, cur[,x]))
+}
+
+
+# Continuous variables
+cont <- c('age_at_initial_pathologic_diagnosis', 'breslow_depth_value', 'bmi.exposures', 'malignant_neoplasm_mitotic_count_rate')
+
+# loop through continuous variables
+for(x in cont){
+  
+  print(x)
+
+  # create quartiles of current continuous variable
+  cur$var <- 'quart3'
+  cur$var <- ifelse(cur[,x] >= quantile(cur[,x], na.rm = T)[4], 'quart4', cur$var)
+  cur$var <- ifelse(cur[,x] <= quantile(cur[,x], na.rm = T)[3], 'quart2', cur$var)
+  cur$var <- ifelse(cur[,x] <= quantile(cur[,x], na.rm = T)[2], 'quart1', cur$var)
+
+  # table
+  print(table(cur$comp, cur$var))
+  
+}
+
+
+```
+
 ### 306 gene signature Kaplan meijer for OS - 1st vs 4th quartile
 ```{r}
 
-# temp df to hold filtered coaduniq data
-dat <- coaduniq 
+# temp df to hold filtered skcmuniq data
+dat <- skcmuniq 
 
 # get sigscores for stratifying in kaplan meijer curve
 cur <- make_plots(
@@ -550,8 +610,8 @@ autoplot(km_fit)
 ```{r}
 
 # Define comparison
-coad$comp <- coad$sample_type.samples
-dat <- coad %>% dplyr::filter(sample_type.samples %in% c('Primary Tumor', 'Solid Tissue Normal'))
+skcm$comp <- skcm$sample_type.samples
+dat <- skcm %>% dplyr::filter(sample_type.samples %in% c('Primary Tumor', 'Metastatic'))
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -569,36 +629,14 @@ cur[3]
 
 ```
 
-### 306 gene signature for Kras mutation found
-KRAS known to prevent ferroptosis
+### 306 gene signature for submitted tumor location
 ```{r}
 
 # Define comparison
-coaduniq$comp <- ifelse(coaduniq$kras_mutation_found == '', 'no analysis', coaduniq$kras_mutation_found)
-dat <- coaduniq %>% dplyr::filter(kras_mutation_found %in% c('YES', 'NO'))
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig306_up, 
-  DOWNGENES = sig306_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'wilcox.test',
-  TITLE = '306 gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
-### 306 gene signature for follow up treatment success
-```{r}
-
-# Define comparison
-coaduniq$comp <- coaduniq$followup_treatment_success
-dat <- coaduniq %>% dplyr::filter(followup_treatment_success %in% c('Complete Remission/Response', 'Partial Remission/Response', 'Progressive Disease', 'Stable Disease'))
+skcm$comp <- skcm$submitted_tumor_location
+dat <- skcm %>% dplyr::filter(comp %in% c('Distant Metastasis', 'Primary Tumor ', 
+                                                         'Regional Cutaneous or Subcutaneous Tissue (includes satellite and in-transit metastasis)',
+                                                         'Regional Lymph Node'))
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -616,12 +654,34 @@ cur[3]
 
 ```
 
-### 306 gene signature for lymphatic invasion
+### 306 gene signature for history_of_neoadjuvant_treatment
 ```{r}
 
 # Define comparison
-coaduniq$comp <- coaduniq$lymphatic_invasion
-dat <- coaduniq %>% dplyr::filter(lymphatic_invasion %in% c('YES', 'NO'))
+skcmuniq$comp <- skcmuniq$history_of_neoadjuvant_treatment
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = skcmuniq,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '306 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 306 gene signature for melanoma_ulceration_indicator
+```{r}
+
+# Define comparison
+skcmuniq$comp <- skcmuniq$melanoma_ulceration_indicator
+dat <- skcmuniq %>% dplyr::filter(melanoma_ulceration_indicator != '')
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -639,12 +699,15 @@ cur[3]
 
 ```
 
-### 306 gene signature for follow up microsatellite instability
+### 306 gene signature for breslow_depth_value
 ```{r}
 
 # Define comparison
-coaduniq$comp <- coaduniq$microsatellite_instability
-dat <- coaduniq %>% dplyr::filter(microsatellite_instability %in% c('NO', 'YES'))
+dat <- skcmuniq %>% 
+  mutate(comp = ifelse(breslow_depth_value >= quantile(breslow_depth_value, na.rm = T)[3], 'quant_3', 'quant_2')) %>%
+  mutate(comp = ifelse(breslow_depth_value >= quantile(breslow_depth_value, na.rm = T)[4], 'quant_4', comp)) %>%
+  mutate(comp = ifelse(breslow_depth_value < quantile(breslow_depth_value, na.rm = T)[2], 'quant_1', comp))
+dat %<>% filter(!is.na(comp))
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -652,13 +715,31 @@ cur <- make_plots(
   UPGENES = sig306_up, 
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
-  STAT_TEST = 'wilcox.test',
+  STAT_TEST = 'anova',
   TITLE = '306 gene sig')
 
 # plot and get df
-
 cur[3]
 #cur[4]
+
+
+# correlation
+ggscatter(cur[[1]], x='ss.TotalScore', y='breslow_depth_value',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# correlation of log
+cur <- cur[[1]]
+cur$log2bres <- log2(cur$breslow_depth_value)
+ggscatter(cur, x='ss.TotalScore', y='log2bres',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+
 
 ```
 
@@ -666,12 +747,12 @@ cur[3]
 ```{r}
 
 # Define comparison
-dat <- coaduniq %>% 
-  mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage i', 'stage ia'), 'stage 1', tumor_stage.diagnoses)) %>% 
+dat <- skcmuniq %>% 
+  mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage i', 'stage ia', 'stage ib'), 'stage 1', tumor_stage.diagnoses)) %>% 
   mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage ii', 'stage iia', 'stage iib', 'stage iic'), 'stage 2', comp)) %>%
   mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage iii', 'stage iiia', 'stage iiib', 'stage iiic'), 'stage 3', comp)) %>%
   mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage iv', 'stage iva', 'stage ivb'), 'stage 4', comp)) %>%
-  dplyr::filter(!comp %in% c('not reported'))
+  dplyr::filter(!comp %in% c('not reported', 'stage 0', 'i/ii nos'))
                                 
 
 # plot PCA and boxplots
@@ -682,21 +763,12 @@ cur <- make_plots(
   COMP = 'comp', 
   STAT_TEST = 'anova',
   TITLE = '306 gene sig')
-
 # plot and get df
-
 cur[3]
 #cur[4]
 
-```
-
-### 306 gene signature for loss of mismatch repair proteins
-```{r}
-
-# Define comparison
-dat <- coaduniq %>% mutate(comp = loss_expression_of_mismatch_repair_proteins_by_ihc) %>%
-  dplyr::filter(comp %in% c('YES', 'NO'))
-                            
+# Look at just stage 1 and 4
+dat %<>% dplyr::filter(comp %in% c('stage 1', 'stage 4'))
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -704,12 +776,13 @@ cur <- make_plots(
   UPGENES = sig306_up, 
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
-  STAT_TEST = 'anova',
+  STAT_TEST = 'wilcox.test',
   TITLE = '306 gene sig')
-
 # plot and get df
 cur[3]
 #cur[4]
+
+
 
 ```
 
@@ -717,7 +790,7 @@ cur[3]
 ```{r}
 
 # Define comparison
-dat <- coaduniq %>% 
+dat <- skcmuniq %>% 
   mutate(comp = ifelse(age_at_initial_pathologic_diagnosis >= quantile(age_at_initial_pathologic_diagnosis)[3], 'quant_3', 'quant_2')) %>%
   mutate(comp = ifelse(age_at_initial_pathologic_diagnosis >= quantile(age_at_initial_pathologic_diagnosis)[4], 'quant_4', comp)) %>%
   mutate(comp = ifelse(age_at_initial_pathologic_diagnosis < quantile(age_at_initial_pathologic_diagnosis)[2], 'quant_1', comp)) 
@@ -764,11 +837,11 @@ sig63_dn <- sig63 %>%
 ```{r}
 
 # Define comparison
-coaduniq$comp <- 'all'
+skcmuniq$comp <- 'all'
 
 # get PCA and boxplots
 cur <- make_plots(
-  DF = coaduniq,
+  DF = skcmuniq,
   UPGENES = sig63_up, 
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
@@ -782,7 +855,7 @@ cur[4]
 # Look at correlation of singscore with SLC levels
 cur <- cur[[1]]
 cur %<>% dplyr::select(submitter_id.samples, ss.TotalScore, directional_Zsum) %>%
-  merge(., coaduniq, by = 'submitter_id.samples')
+  merge(., skcmuniq, by = 'submitter_id.samples')
 
 # singScore with SLC3A2 expression
 ggscatter(cur, x='ss.TotalScore', y='SLC3A2',
@@ -826,7 +899,7 @@ ggscatter(cur, x='SLC3A2', y='SLC7A11',
 
 # Load gene sig scores
 cur <- make_plots(
-  DF = coad,
+  DF = skcm,
   UPGENES = sig63_up, 
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
@@ -895,11 +968,13 @@ ggscatter(cur, x='ss.TotalScore', y='otherCells',
 ```
 
 ### Examine variables by table fxn to help narrow down which are interesting
+discrete: history_of_neoadjuvant_treatment, submitted_tumor_location melanoma_ulceration_indicator
+continuous: breslow_depth_value
 ```{r}
 
 # get sigscores 
 cur <- make_plots(
-  DF = coaduniq,
+  DF = skcmuniq,
   UPGENES = sig63_up, 
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
@@ -915,9 +990,8 @@ cur %<>%
 
 
 # Discrete variables 
-disc <- c('braf_gene_analysis_result', 'colon_polyps_present', 'kras_mutation_codon', 'loss_expression_of_mismatch_repair_proteins_by_ihc',
-          'perineural_invasion_present', 'radiation_therapy', 'gender.demographic', 'tumor_stage.diagnoses', 'followup_treatment_success',
-          'history_of_neoadjuvant_treatment', 'lymphatic_invasion', 'primary_therapy_outcome_success', 'venous_invasion', 'prior_malignancy.diagnoses')
+disc <- c('history_of_neoadjuvant_treatment', 'lactate_dehydrogenase_result', 'prior_systemic_therapy_type', 
+          'submitted_tumor_location', 'melanoma_origin_skin_anatomic_site', 'prior_radiation_therapy', 'melanoma_ulceration_indicator')
 
 # loop through discrete variables
 for(x in disc){
@@ -927,7 +1001,7 @@ for(x in disc){
 
 
 # Continuous variables
-cont <- c('age_at_initial_pathologic_diagnosis', 'bmi.exposures')
+cont <- c('age_at_initial_pathologic_diagnosis', 'breslow_depth_value', 'bmi.exposures', 'malignant_neoplasm_mitotic_count_rate')
 
 # loop through continuous variables
 for(x in cont){
@@ -951,8 +1025,8 @@ for(x in cont){
 ### 63 gene signature Kaplan meijer for OS - 1st vs 4th quartile
 ```{r}
 
-# temp df to hold filtered coaduniq data
-dat <- coaduniq 
+# temp df to hold filtered skcmuniq data
+dat <- skcmuniq 
 
 # get sigscores for stratifying in kaplan meijer curve
 cur <- make_plots(
@@ -986,8 +1060,8 @@ autoplot(km_fit)
 ```{r}
 
 # Define comparison
-coad$comp <- coad$sample_type.samples
-dat <- coad %>% dplyr::filter(sample_type.samples %in% c('Primary Tumor', 'Solid Tissue Normal'))
+skcm$comp <- skcm$sample_type.samples
+dat <- skcm %>% dplyr::filter(sample_type.samples %in% c('Primary Tumor', 'Metastatic'))
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -1005,36 +1079,14 @@ cur[3]
 
 ```
 
-### 63 gene signature for Kras mutation found
-KRAS known to prevent ferroptosis
+### 63 gene signature for submitted tumor location
 ```{r}
 
 # Define comparison
-coaduniq$comp <- ifelse(coaduniq$kras_mutation_found == '', 'no analysis', coaduniq$kras_mutation_found)
-dat <- coaduniq %>% dplyr::filter(kras_mutation_found %in% c('YES', 'NO'))
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'wilcox.test',
-  TITLE = '63 gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
-### 63 gene signature for follow up treatment success
-```{r}
-
-# Define comparison
-coaduniq$comp <- coaduniq$followup_treatment_success
-dat <- coaduniq %>% dplyr::filter(followup_treatment_success %in% c('Complete Remission/Response', 'Partial Remission/Response', 'Progressive Disease', 'Stable Disease'))
+skcm$comp <- skcm$submitted_tumor_location
+dat <- skcm %>% dplyr::filter(comp %in% c('Distant Metastasis', 'Primary Tumor ', 
+                                                         'Regional Cutaneous or Subcutaneous Tissue (includes satellite and in-transit metastasis)',
+                                                         'Regional Lymph Node'))
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -1052,12 +1104,34 @@ cur[3]
 
 ```
 
-### 63 gene signature for lymphatic invasion
+### 63 gene signature for history_of_neoadjuvant_treatment
 ```{r}
 
 # Define comparison
-coaduniq$comp <- coaduniq$lymphatic_invasion
-dat <- coaduniq %>% dplyr::filter(lymphatic_invasion %in% c('YES', 'NO'))
+skcmuniq$comp <- skcmuniq$history_of_neoadjuvant_treatment
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = skcmuniq,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '63 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 63 gene signature for melanoma_ulceration_indicator
+```{r}
+
+# Define comparison
+skcmuniq$comp <- skcmuniq$melanoma_ulceration_indicator
+dat <- skcmuniq %>% dplyr::filter(melanoma_ulceration_indicator != '')
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -1075,12 +1149,15 @@ cur[3]
 
 ```
 
-### 63 gene signature for follow up microsatellite instability
+### 63 gene signature for breslow_depth_value
 ```{r}
 
 # Define comparison
-coaduniq$comp <- coaduniq$microsatellite_instability
-dat <- coaduniq %>% dplyr::filter(microsatellite_instability %in% c('NO', 'YES'))
+dat <- skcmuniq %>% 
+  mutate(comp = ifelse(breslow_depth_value >= quantile(breslow_depth_value, na.rm = T)[3], 'quant_3', 'quant_2')) %>%
+  mutate(comp = ifelse(breslow_depth_value >= quantile(breslow_depth_value, na.rm = T)[4], 'quant_4', comp)) %>%
+  mutate(comp = ifelse(breslow_depth_value < quantile(breslow_depth_value, na.rm = T)[2], 'quant_1', comp))
+dat %<>% filter(!is.na(comp))
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -1088,13 +1165,31 @@ cur <- make_plots(
   UPGENES = sig63_up, 
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
-  STAT_TEST = 'wilcox.test',
+  STAT_TEST = 'anova',
   TITLE = '63 gene sig')
 
 # plot and get df
-
 cur[3]
 #cur[4]
+
+
+# correlation
+ggscatter(cur[[1]], x='ss.TotalScore', y='breslow_depth_value',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# correlation of log
+cur <- cur[[1]]
+cur$log2bres <- log2(cur$breslow_depth_value)
+ggscatter(cur, x='ss.TotalScore', y='log2bres',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+
 
 ```
 
@@ -1102,12 +1197,12 @@ cur[3]
 ```{r}
 
 # Define comparison
-dat <- coaduniq %>% 
-  mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage i', 'stage ia'), 'stage 1', tumor_stage.diagnoses)) %>% 
+dat <- skcmuniq %>% 
+  mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage i', 'stage ia', 'stage ib'), 'stage 1', tumor_stage.diagnoses)) %>% 
   mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage ii', 'stage iia', 'stage iib', 'stage iic'), 'stage 2', comp)) %>%
   mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage iii', 'stage iiia', 'stage iiib', 'stage iiic'), 'stage 3', comp)) %>%
   mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage iv', 'stage iva', 'stage ivb'), 'stage 4', comp)) %>%
-  dplyr::filter(!comp %in% c('not reported'))
+  dplyr::filter(!comp %in% c('not reported', 'stage 0', 'i/ii nos'))
                                 
 
 # plot PCA and boxplots
@@ -1141,34 +1236,11 @@ cur[3]
 
 ```
 
-### 63 gene signature for loss of mismatch repair proteins
-```{r}
-
-# Define comparison
-dat <- coaduniq %>% mutate(comp = loss_expression_of_mismatch_repair_proteins_by_ihc) %>%
-  dplyr::filter(comp %in% c('YES', 'NO'))
-                            
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
-
-# plot and get df
-cur[3]
-#cur[4]
-
-```
-
 ### 63 gene signature for age
 ```{r}
 
 # Define comparison
-dat <- coaduniq %>% 
+dat <- skcmuniq %>% 
   mutate(comp = ifelse(age_at_initial_pathologic_diagnosis >= quantile(age_at_initial_pathologic_diagnosis)[3], 'quant_3', 'quant_2')) %>%
   mutate(comp = ifelse(age_at_initial_pathologic_diagnosis >= quantile(age_at_initial_pathologic_diagnosis)[4], 'quant_4', comp)) %>%
   mutate(comp = ifelse(age_at_initial_pathologic_diagnosis < quantile(age_at_initial_pathologic_diagnosis)[2], 'quant_1', comp)) 
@@ -1188,6 +1260,11 @@ cur[3]
 #cur[4]
 
 ```
+
+
+
+
+
 
 
 
