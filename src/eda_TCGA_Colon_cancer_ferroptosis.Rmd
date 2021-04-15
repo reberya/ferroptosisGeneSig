@@ -112,7 +112,6 @@ coad <- merge(coad, temp, by.x = 'submitter_id.samples', by.y=0)
 
 # EPIC (cell proportion estimate)
 
-
 ### Run EPIC and combine with existing metadata
 Triggers error regarding convergance. Documentation indicates this might happen. 
 ```{r}
@@ -123,12 +122,11 @@ epic <- EPIC(bulk = fpkm,
 
 
 # Merge dataframes for downstream use
-coad <- merge(epic$cellFractions, coad, by.x = 0, by.y = 'submitter_id.samples')
+coad <- merge(coad, epic$cellFractions, by.x = 'submitter_id.samples', by.y = 0)
 
 # Order dataframe
 coad %<>% set_rownames(coad$Row.names) %>%
-  dplyr::relocate(Bcells:otherCells, .after=OS.time) %>%
-  dplyr::select(-Row.names)
+  dplyr::relocate(Bcells:otherCells, .after=OS.time)
 
 ```
 
@@ -156,12 +154,6 @@ table(coaduniq$is_ffpe.samples)
 table(duplicated(coaduniq$patient_id))
 
 ```
-
-
-
-
-
-
 
 
 
@@ -200,9 +192,9 @@ https://bioconductor.org/packages/devel/bioc/vignettes/singscore/inst/doc/singsc
 # DF - the cleaned dataframe from above
 # UPGENES - list of genes upregulated in gene signature
 # DOWNGENES - list of genes downregulated in gene signature
-# METACOLS - the columns of metadata within DF
+# METACOLS - the columns of metadata within DF (needs to be one greater than number of metacols currently; d/t Row.names being added during merge)
 
-calculate_signature_scores <- function(DF, UPGENES, DOWNGENES, METACOLS = 1:131){
+calculate_signature_scores <- function(DF, UPGENES, DOWNGENES, METACOLS = 1:133){
   
   # create temp dataframe
   cnts <- DF %>% set_rownames(paste0('Sample_', 1:length(DF[,1])))
@@ -362,6 +354,7 @@ make_plots <- function(
 ```
 
 
+
 # Analyze gene signatures 
 
 ## 306 gene signature
@@ -445,7 +438,7 @@ ggscatter(cur, x='SLC3A2', y='SLC7A11',
 
 ```
 
-### Correlation with cell proportions and Gini coefficients
+### Correlation with cell proportions
 ```{r}
 
 # Load gene sig scores
@@ -552,11 +545,648 @@ autoplot(km_fit)
 
 ```
 
+### 306 gene signature for tissue type
+```{r}
+
+# Define comparison
+coad$comp <- coad$sample_type.samples
+dat <- coad %>% dplyr::filter(sample_type.samples %in% c('Primary Tumor', 'Solid Tissue Normal'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '306 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 306 gene signature for Kras mutation found
+KRAS known to prevent ferroptosis
+```{r}
+
+# Define comparison
+coaduniq$comp <- ifelse(coaduniq$kras_mutation_found == '', 'no analysis', coaduniq$kras_mutation_found)
+dat <- coaduniq %>% dplyr::filter(kras_mutation_found %in% c('YES', 'NO'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '306 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 306 gene signature for follow up treatment success
+```{r}
+
+# Define comparison
+coaduniq$comp <- coaduniq$followup_treatment_success
+dat <- coaduniq %>% dplyr::filter(followup_treatment_success %in% c('Complete Remission/Response', 'Partial Remission/Response', 'Progressive Disease', 'Stable Disease'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 306 gene signature for lymphatic invasion
+```{r}
+
+# Define comparison
+coaduniq$comp <- coaduniq$lymphatic_invasion
+dat <- coaduniq %>% dplyr::filter(lymphatic_invasion %in% c('YES', 'NO'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '306 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 306 gene signature for follow up microsatellite instability
+```{r}
+
+# Define comparison
+coaduniq$comp <- coaduniq$microsatellite_instability
+dat <- coaduniq %>% dplyr::filter(microsatellite_instability %in% c('NO', 'YES'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '306 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 306 gene signature for tumor_stage.diagnoses
+```{r}
+
+# Define comparison
+dat <- coaduniq %>% 
+  mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage i', 'stage ia'), 'stage 1', tumor_stage.diagnoses)) %>% 
+  mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage ii', 'stage iia', 'stage iib', 'stage iic'), 'stage 2', comp)) %>%
+  mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage iii', 'stage iiia', 'stage iiib', 'stage iiic'), 'stage 3', comp)) %>%
+  mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage iv', 'stage iva', 'stage ivb'), 'stage 4', comp)) %>%
+  dplyr::filter(!comp %in% c('not reported'))
+                                
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 306 gene signature for loss of mismatch repair proteins
+```{r}
+
+# Define comparison
+dat <- coaduniq %>% mutate(comp = loss_expression_of_mismatch_repair_proteins_by_ihc) %>%
+  dplyr::filter(comp %in% c('YES', 'NO'))
+                            
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+
+# plot and get df
+cur[3]
+#cur[4]
+
+```
+
+### 306 gene signature for age
+```{r}
+
+# Define comparison
+dat <- coaduniq %>% 
+  mutate(comp = ifelse(age_at_initial_pathologic_diagnosis >= quantile(age_at_initial_pathologic_diagnosis)[3], 'quant_3', 'quant_2')) %>%
+  mutate(comp = ifelse(age_at_initial_pathologic_diagnosis >= quantile(age_at_initial_pathologic_diagnosis)[4], 'quant_4', comp)) %>%
+  mutate(comp = ifelse(age_at_initial_pathologic_diagnosis < quantile(age_at_initial_pathologic_diagnosis)[2], 'quant_1', comp)) 
+                           
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+
+# plot and get df
+cur[3]
+#cur[4]
+
+```
 
 
 
+## 63 gene signature
+
+### Load gene signature
+```{r}
+sig63 <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/gene_signatures/erastin_clue24h_gse104462_63genes.txt',
+                data.table = F)
+
+# Upregulated
+sig63_up <- sig63 %>% 
+  dplyr::filter(upregulated == T) %>% 
+  dplyr::select(V1) %>% unlist()
+
+# Downregulated
+sig63_dn <- sig63 %>% 
+  dplyr::filter(upregulated == F) %>% 
+  dplyr::select(V1) %>% unlist()
 
 
+```
+
+### Distribution of 63 gene signature scores in all patients. Correlation with SLC levels
+```{r}
+
+# Define comparison
+coaduniq$comp <- 'all'
+
+# get PCA and boxplots
+cur <- make_plots(
+  DF = coaduniq,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '63 gene sig')
+
+# Plot distribution of sing score
+cur[3]
+cur[4]
+
+# Look at correlation of singscore with SLC levels
+cur <- cur[[1]]
+cur %<>% dplyr::select(submitter_id.samples, ss.TotalScore, directional_Zsum) %>%
+  merge(., coaduniq, by = 'submitter_id.samples')
+
+# singScore with SLC3A2 expression
+ggscatter(cur, x='ss.TotalScore', y='SLC3A2',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# singScore with SLC7A11
+ggscatter(cur, x='ss.TotalScore', y='SLC7A11',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# Directional Z sum with SLC3A2
+ggscatter(cur, x='directional_Zsum', y='SLC3A2',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# Directional Z sum with SLC7A11
+ggscatter(cur, x='directional_Zsum', y='SLC7A11',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# SLC7A11 vs SLC3A2
+ggscatter(cur, x='SLC3A2', y='SLC7A11',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+```
+
+### Correlation with cell proportions
+```{r}
+
+# Load gene sig scores
+cur <- make_plots(
+  DF = coad,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '63 gene sig')
+cur <- cur[[1]]
+
+
+# CD4
+ggscatter(cur, x='ss.TotalScore', y='CD4_Tcells',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# CD8
+ggscatter(cur, x='ss.TotalScore', y='CD8_Tcells',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# B cells
+ggscatter(cur, x='ss.TotalScore', y='Bcells',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# CAFs
+ggscatter(cur, x='ss.TotalScore', y='CAFs',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# Endothelial
+ggscatter(cur, x='ss.TotalScore', y='Endothelial',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# Macrophages
+ggscatter(cur, x='ss.TotalScore', y='Macrophages',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# NKcells
+ggscatter(cur, x='ss.TotalScore', y='NKcells',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# otherCells
+ggscatter(cur, x='ss.TotalScore', y='otherCells',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+
+```
+
+### Examine variables by table fxn to help narrow down which are interesting
+```{r}
+
+# get sigscores 
+cur <- make_plots(
+  DF = coaduniq,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '63 gene sig')
+cur <- cur[[1]]
+
+# stratify by sigscores quartile 
+cur %<>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 'gs_quant_3', 'gs_quant_2')) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 'gs_quant_4', comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 'gs_quant_1', comp)) 
+
+
+# Discrete variables 
+disc <- c('braf_gene_analysis_result', 'colon_polyps_present', 'kras_mutation_codon', 'loss_expression_of_mismatch_repair_proteins_by_ihc',
+          'perineural_invasion_present', 'radiation_therapy', 'gender.demographic', 'tumor_stage.diagnoses', 'followup_treatment_success',
+          'history_of_neoadjuvant_treatment', 'lymphatic_invasion', 'primary_therapy_outcome_success', 'venous_invasion', 'prior_malignancy.diagnoses')
+
+# loop through discrete variables
+for(x in disc){
+  print(x)
+  print(table(cur$comp, cur[,x]))
+}
+
+
+# Continuous variables
+cont <- c('age_at_initial_pathologic_diagnosis', 'bmi.exposures')
+
+# loop through continuous variables
+for(x in cont){
+  
+  print(x)
+
+  # create quartiles of current continuous variable
+  cur$var <- 'quart3'
+  cur$var <- ifelse(cur[,x] >= quantile(cur[,x], na.rm = T)[4], 'quart4', cur$var)
+  cur$var <- ifelse(cur[,x] <= quantile(cur[,x], na.rm = T)[3], 'quart2', cur$var)
+  cur$var <- ifelse(cur[,x] <= quantile(cur[,x], na.rm = T)[2], 'quart1', cur$var)
+
+  # table
+  print(table(cur$comp, cur$var))
+  
+}
+
+
+```
+
+### 63 gene signature Kaplan meijer for OS - 1st vs 4th quartile
+```{r}
+
+# temp df to hold filtered coaduniq data
+dat <- coaduniq 
+
+# get sigscores for stratifying in kaplan meijer curve
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '63 gene sig')
+cur <- cur[[1]]
+
+# stratify by quartile 
+cur %<>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+cur %<>% dplyr::filter(comp %in% c(1,4))
+#cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
+
+# stratify by visual cutoff
+#cur %<>% mutate(comp = ifelse(ss.TotalScore > -0.08, 'hi', 'lo'))
+
+# plot Kaplan meijer
+km_fit <- survfit(Surv(OS.time, rep(1, length(cur[,1]))) ~ comp, data=cur)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit)
+
+```
+
+### 63 gene signature for tissue type
+```{r}
+
+# Define comparison
+coad$comp <- coad$sample_type.samples
+dat <- coad %>% dplyr::filter(sample_type.samples %in% c('Primary Tumor', 'Solid Tissue Normal'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '63 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 63 gene signature for Kras mutation found
+KRAS known to prevent ferroptosis
+```{r}
+
+# Define comparison
+coaduniq$comp <- ifelse(coaduniq$kras_mutation_found == '', 'no analysis', coaduniq$kras_mutation_found)
+dat <- coaduniq %>% dplyr::filter(kras_mutation_found %in% c('YES', 'NO'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '63 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 63 gene signature for follow up treatment success
+```{r}
+
+# Define comparison
+coaduniq$comp <- coaduniq$followup_treatment_success
+dat <- coaduniq %>% dplyr::filter(followup_treatment_success %in% c('Complete Remission/Response', 'Partial Remission/Response', 'Progressive Disease', 'Stable Disease'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '63 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 63 gene signature for lymphatic invasion
+```{r}
+
+# Define comparison
+coaduniq$comp <- coaduniq$lymphatic_invasion
+dat <- coaduniq %>% dplyr::filter(lymphatic_invasion %in% c('YES', 'NO'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '63 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 63 gene signature for follow up microsatellite instability
+```{r}
+
+# Define comparison
+coaduniq$comp <- coaduniq$microsatellite_instability
+dat <- coaduniq %>% dplyr::filter(microsatellite_instability %in% c('NO', 'YES'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '63 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 63 gene signature for tumor_stage.diagnoses
+```{r}
+
+# Define comparison
+dat <- coaduniq %>% 
+  mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage i', 'stage ia'), 'stage 1', tumor_stage.diagnoses)) %>% 
+  mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage ii', 'stage iia', 'stage iib', 'stage iic'), 'stage 2', comp)) %>%
+  mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage iii', 'stage iiia', 'stage iiib', 'stage iiic'), 'stage 3', comp)) %>%
+  mutate(comp = ifelse(tumor_stage.diagnoses %in% c('stage iv', 'stage iva', 'stage ivb'), 'stage 4', comp)) %>%
+  dplyr::filter(!comp %in% c('not reported'))
+                                
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '63 gene sig')
+# plot and get df
+cur[3]
+#cur[4]
+
+# Look at just stage 1 and 4
+dat %<>% dplyr::filter(comp %in% c('stage 1', 'stage 4'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '63 gene sig')
+# plot and get df
+cur[3]
+#cur[4]
+
+
+
+```
+
+### 63 gene signature for loss of mismatch repair proteins
+```{r}
+
+# Define comparison
+dat <- coaduniq %>% mutate(comp = loss_expression_of_mismatch_repair_proteins_by_ihc) %>%
+  dplyr::filter(comp %in% c('YES', 'NO'))
+                            
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '63 gene sig')
+
+# plot and get df
+cur[3]
+#cur[4]
+
+```
+
+### 63 gene signature for age
+```{r}
+
+# Define comparison
+dat <- coaduniq %>% 
+  mutate(comp = ifelse(age_at_initial_pathologic_diagnosis >= quantile(age_at_initial_pathologic_diagnosis)[3], 'quant_3', 'quant_2')) %>%
+  mutate(comp = ifelse(age_at_initial_pathologic_diagnosis >= quantile(age_at_initial_pathologic_diagnosis)[4], 'quant_4', comp)) %>%
+  mutate(comp = ifelse(age_at_initial_pathologic_diagnosis < quantile(age_at_initial_pathologic_diagnosis)[2], 'quant_1', comp)) 
+                           
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '63 gene sig')
+
+# plot and get df
+cur[3]
+#cur[4]
+
+```
 
 
 
