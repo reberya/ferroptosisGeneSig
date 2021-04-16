@@ -279,7 +279,7 @@ make_plots <- function(
   DOWNGENES, 
   COMP='comp', 
   STAT_TEST = 'wilcox.test',
-  TITLE = 'XX gene sig'){
+  TITLE = 'Comparison'){
   
   ####################
   # return genes not in provided gene list and remove from query
@@ -326,7 +326,7 @@ make_plots <- function(
     geom_boxplot(outlier.shape = NA) +
     geom_jitter(alpha=0.6, width=0.15) +
     theme_bw(base_size=16) +
-    labs(subtitle=paste0("SingScore by Risk group in dxprim: ", TITLE)) +
+    labs(subtitle=TITLE) +
     stat_compare_means(method = STAT_TEST) +
     xlab(NULL)
   
@@ -344,7 +344,7 @@ make_plots <- function(
     geom_boxplot(outlier.shape = NA) +
     geom_jitter(alpha=0.6, width=0.15) +
     theme_bw(base_size=16) +
-    labs(subtitle=paste0("Directional Z score by Risk group in dxprim: ", TITLE)) +
+    labs(subtitle=TITLE) +
     stat_compare_means(method = STAT_TEST) +
     xlab(NULL)
   
@@ -611,7 +611,7 @@ cur <- make_plots(
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
   STAT_TEST = 'wilcox.test',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: Tissue type')
 
 # plot and get df
 
@@ -635,7 +635,7 @@ cur <- make_plots(
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
   STAT_TEST = 'wilcox.test',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: KRAS mutational status')
 
 # plot and get df
 
@@ -658,7 +658,7 @@ cur <- make_plots(
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: followup txt success')
 
 # plot and get df
 
@@ -681,7 +681,7 @@ cur <- make_plots(
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
   STAT_TEST = 'wilcox.test',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: lymphatic invasion')
 
 # plot and get df
 
@@ -704,7 +704,7 @@ cur <- make_plots(
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
   STAT_TEST = 'wilcox.test',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: MSI')
 
 # plot and get df
 
@@ -732,12 +732,22 @@ cur <- make_plots(
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: tumor stage')
 
 # plot and get df
 
 cur[3]
 #cur[4]
+
+# Check if the highest ferroptosis scores in stage 4 associate with more advanced disease
+dat <- cur[[1]] %>% dplyr::mutate(stage = ifelse(tumor_stage.diagnoses %in% c('stage iv', 'stage iva', 'stage ivb'), tumor_stage.diagnoses, 'other'))
+
+dat %>% ggplot(aes(x=comp, y=ss.TotalScore)) + 
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(alpha=0.6, width=0.15, aes(color=stage)) +
+    theme_bw(base_size=16) +
+    labs(subtitle='Tumor stage: look at stage 4') +
+    xlab(NULL)  
 
 ```
 
@@ -756,7 +766,7 @@ cur <- make_plots(
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: MMR loss')
 
 # plot and get df
 cur[3]
@@ -781,7 +791,7 @@ cur <- make_plots(
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: age')
 
 # plot and get df
 cur[3]
@@ -1098,7 +1108,7 @@ cur <- make_plots(
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
   STAT_TEST = 'wilcox.test',
-  TITLE = '63 gene sig')
+  TITLE = '63gs: tissue type')
 
 # plot and get df
 
@@ -1122,7 +1132,7 @@ cur <- make_plots(
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
   STAT_TEST = 'wilcox.test',
-  TITLE = '63 gene sig')
+  TITLE = '63gs: KRAS mutation')
 
 # plot and get df
 
@@ -1145,7 +1155,7 @@ cur <- make_plots(
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
+  TITLE = '63gs: follup txt success')
 
 # plot and get df
 
@@ -1168,7 +1178,7 @@ cur <- make_plots(
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
   STAT_TEST = 'wilcox.test',
-  TITLE = '63 gene sig')
+  TITLE = '63gs: lymphatic invasion')
 
 # plot and get df
 
@@ -1191,7 +1201,7 @@ cur <- make_plots(
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
   STAT_TEST = 'wilcox.test',
-  TITLE = '63 gene sig')
+  TITLE = '63gs: MSI')
 
 # plot and get df
 
@@ -1219,7 +1229,7 @@ cur <- make_plots(
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
+  TITLE = '63gs: Tumor stage')
 # plot and get df
 cur[3]
 #cur[4]
@@ -1234,12 +1244,20 @@ cur <- make_plots(
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
   STAT_TEST = 'wilcox.test',
-  TITLE = '63 gene sig')
+  TITLE = '63gs: Tumor stage')
 # plot and get df
 cur[3]
 #cur[4]
 
+# Check if the highest ferroptosis scores in stage 4 associate with more advanced disease
+dat <- cur[[1]] %>% dplyr::mutate(stage = ifelse(tumor_stage.diagnoses %in% c('stage iv', 'stage iva', 'stage ivb'), tumor_stage.diagnoses, 'other'))
 
+dat %>% ggplot(aes(x=comp, y=ss.TotalScore)) + 
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(alpha=0.6, width=0.15, aes(color=stage)) +
+    theme_bw(base_size=16) +
+    labs(subtitle='Tumor stage: look at stage 4') +
+    xlab(NULL)  
 
 ```
 
@@ -1258,7 +1276,7 @@ cur <- make_plots(
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
+  TITLE = '63gs: MMR loss')
 
 # plot and get df
 cur[3]
@@ -1283,7 +1301,7 @@ cur <- make_plots(
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
+  TITLE = '63:age')
 
 # plot and get df
 cur[3]
