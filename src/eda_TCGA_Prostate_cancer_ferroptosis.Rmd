@@ -333,7 +333,7 @@ make_plots <- function(
     geom_boxplot(outlier.shape = NA) +
     geom_jitter(alpha=0.6, width=0.15) +
     theme_bw(base_size=16) +
-    labs(subtitle=paste0("SingScore by Risk group in dxprim: ", TITLE)) +
+    labs(subtitle=TITLE) +
     stat_compare_means(method = STAT_TEST) +
     xlab(NULL)
   
@@ -351,7 +351,7 @@ make_plots <- function(
     geom_boxplot(outlier.shape = NA) +
     geom_jitter(alpha=0.6, width=0.15) +
     theme_bw(base_size=16) +
-    labs(subtitle=paste0("Directional Z score by Risk group in dxprim: ", TITLE)) +
+    labs(subtitle=TITLE) +
     stat_compare_means(method = STAT_TEST) +
     xlab(NULL)
   
@@ -386,6 +386,7 @@ sig306_dn <- sig306 %>%
 ```
 
 ### Distribution of 306 gene signature scores in all patients. Correlation with SLC levels
+Also check correlation with MIR522 -secreted by fibroblasts and inhibits ferroptosis (https://molecular-cancer.biomedcentral.com/articles/10.1186/s12943-020-01168-8#:~:text=Ferroptosis%20is%20a%20novel%20mode,various%20bioactive%20substances%2C%20including%20exosomes)
 ```{r}
 
 # Define comparison
@@ -439,6 +440,34 @@ ggscatter(cur, x='directional_Zsum', y='SLC7A11',
 
 # SLC7A11 vs SLC3A2
 ggscatter(cur, x='SLC3A2', y='SLC7A11',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# singScore with ALOX15 expression
+ggscatter(cur, x='ss.TotalScore', y='ALOX15',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# singScore with ALOX15B expression
+ggscatter(cur, x='ss.TotalScore', y='ALOX15B',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# singScore with PLIN2 expression
+ggscatter(cur, x='ss.TotalScore', y='PLIN2',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+# singScore with GDF15 expression
+ggscatter(cur, x='ss.TotalScore', y='GDF15',
           add='reg.line',
           add.params = list(color='blue', fill='lightgray'),
           conf.int = T) +
@@ -570,6 +599,30 @@ table(cur$elife_sub, cur$sig306_sub)
 
 ```
 
+### 306 gene signature for tissue type
+```{r}
+
+# Define comparison
+prad$comp <- prad$sample_type.samples
+dat <- prad %>% dplyr::filter(sample_type.samples %in% c('Primary Tumor', 'Solid Tissue Normal'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '306gs: Tissue type')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+
 ### Examine variables by table fxn to help narrow down which are interesting
 discrete: 
 continuous: psa_value gleason_score
@@ -582,7 +635,7 @@ cur <- make_plots(
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
+  TITLE = 'NA')
 cur <- cur[[1]]
 
 # stratify by sigscores quartile 
@@ -666,7 +719,13 @@ dat <- praduniq %>%
   mutate(comp = ifelse(psa_value >= quantile(psa_value, na.rm = T)[3], 'quant_3', 'quant_2')) %>%
   mutate(comp = ifelse(psa_value >= quantile(psa_value, na.rm = T)[4], 'quant_4', comp)) %>%
   mutate(comp = ifelse(psa_value < quantile(psa_value, na.rm = T)[2], 'quant_1', comp))
-dat %<>% filter(!is.na(comp))
+
+# clean
+## remove na vars
+dat %<>% filter(!is.na(comp)) %>%
+  ##remove outliers
+  mutate(psa_value = log10(psa_value +0.1))
+  
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -675,12 +734,19 @@ cur <- make_plots(
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: PSA value')
 
 # plot and get df
 cur[3]
 #cur[4]
 
+# correlation
+ggscatter(cur[[1]], x='ss.TotalScore', y='psa_value',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson") +
+  ylab('log10(psa + 0.1)')
 
 ```
 
@@ -697,7 +763,7 @@ cur <- make_plots(
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: Gleason score')
 
 # plot and get df
 
@@ -1009,7 +1075,13 @@ dat <- praduniq %>%
   mutate(comp = ifelse(psa_value >= quantile(psa_value, na.rm = T)[3], 'quant_3', 'quant_2')) %>%
   mutate(comp = ifelse(psa_value >= quantile(psa_value, na.rm = T)[4], 'quant_4', comp)) %>%
   mutate(comp = ifelse(psa_value < quantile(psa_value, na.rm = T)[2], 'quant_1', comp))
-dat %<>% filter(!is.na(comp))
+
+# clean
+## remove na vars
+dat %<>% filter(!is.na(comp)) %>%
+  ##remove outliers
+  mutate(psa_value = log10(psa_value +0.1))
+  
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -1018,12 +1090,19 @@ cur <- make_plots(
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
+  TITLE = '63gs: PSA value')
 
 # plot and get df
 cur[3]
 #cur[4]
 
+# correlation
+ggscatter(cur[[1]], x='ss.TotalScore', y='psa_value',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson") +
+  ylab('log10(psa + 0.1)')
 
 ```
 
@@ -1040,7 +1119,7 @@ cur <- make_plots(
   DOWNGENES = sig63_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
+  TITLE = '63gs: gleason score')
 
 # plot and get df
 
