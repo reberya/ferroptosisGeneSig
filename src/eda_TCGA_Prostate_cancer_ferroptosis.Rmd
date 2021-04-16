@@ -519,6 +519,57 @@ ggscatter(cur, x='ss.TotalScore', y='otherCells',
 
 ```
 
+### Correlation of 306gs with elife score
+```{r}
+
+# Load signature
+elife_up <- c('CHAC1', 'DDIT4', 'LOC284561', 'ASNS', 'TSC22D3', 'DDIT3', 'JDP2', 'SESN2',
+              'SLC1A4', 'PCK2', 'SLC7A11', 'TXNIP', 'VLDLR', 'GPT2', 'PSAT1', 'C9ORF150',
+              'SLC7A5', 'HERPUD1', 'XBP1', 'ATF3', 'SLC3A2', 'CBS', 'ATF4', 'ZNF419', 
+              'KLHL24', 'TRIB3', 'ZNF643', 'ATP6V1G2', 'VEGFA', 'GDF15', 'TUBE1', 
+              'ARRDC3', 'CEBPG')
+elife_down <- c('SNORA16A', 'RGS4', 'MUTED-TXNDC5', 'LOC390705')
+
+
+# Determine correlation
+## get elife values
+prad$comp <- 'all'
+cur <- make_plots(
+  DF = prad,
+  UPGENES = elife_up, 
+  DOWNGENES = elife_down, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = 'elife gene sig')
+cur <- cur[[1]]
+cur %<>% dplyr::select(submitter_id.samples, ss.TotalScore, directional_Zsum) %>% set_colnames(c('submitter_id.samples', 'elife.ss', 'elife.zsum'))
+## get sig306 values
+temp <- make_plots(
+  DF = prad,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = 'elife gene sig')
+temp <- temp[[1]]
+temp %<>% dplyr::select(submitter_id.samples, ss.TotalScore, directional_Zsum) %>% set_colnames(c('submitter_id.samples', 'sig306.ss', 'sig306.zsum'))
+##merge
+cur %<>% merge(., temp, by = 'submitter_id.samples')
+## Plot singscore elife vs singscore 306
+ggscatter(cur, x='elife.ss', y='sig306.ss',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+## Determine if the high scoring samples are the same in both scores
+cur %<>% 
+  mutate(elife_sub = ifelse(elife.ss >= quantile(elife.ss)[4], 'elife_hi', 'elife_lo')) %>%
+  mutate(sig306_sub = ifelse(sig306.ss >= quantile(sig306.ss)[4], 'sig306_hi', 'sig306_lo'))
+table(cur$elife_sub, cur$sig306_sub)
+
+
+```
+
 ### Examine variables by table fxn to help narrow down which are interesting
 discrete: 
 continuous: psa_value gleason_score
@@ -807,6 +858,57 @@ ggscatter(cur, x='ss.TotalScore', y='otherCells',
           add.params = list(color='blue', fill='lightgray'),
           conf.int = T) +
   stat_cor(method = "pearson")
+
+
+```
+
+### Correlation of 63gs with elife score
+```{r}
+
+# Load signature
+elife_up <- c('CHAC1', 'DDIT4', 'LOC284561', 'ASNS', 'TSC22D3', 'DDIT3', 'JDP2', 'SESN2',
+              'SLC1A4', 'PCK2', 'SLC7A11', 'TXNIP', 'VLDLR', 'GPT2', 'PSAT1', 'C9ORF150',
+              'SLC7A5', 'HERPUD1', 'XBP1', 'ATF3', 'SLC3A2', 'CBS', 'ATF4', 'ZNF419', 
+              'KLHL24', 'TRIB3', 'ZNF643', 'ATP6V1G2', 'VEGFA', 'GDF15', 'TUBE1', 
+              'ARRDC3', 'CEBPG')
+elife_down <- c('SNORA16A', 'RGS4', 'MUTED-TXNDC5', 'LOC390705')
+
+
+# Determine correlation
+## get elife values
+prad$comp <- 'all'
+cur <- make_plots(
+  DF = prad,
+  UPGENES = elife_up, 
+  DOWNGENES = elife_down, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = 'elife gene sig')
+cur <- cur[[1]]
+cur %<>% dplyr::select(submitter_id.samples, ss.TotalScore, directional_Zsum) %>% set_colnames(c('submitter_id.samples', 'elife.ss', 'elife.zsum'))
+## get sig63 values
+temp <- make_plots(
+  DF = prad,
+  UPGENES = sig63_up, 
+  DOWNGENES = sig63_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = 'elife gene sig')
+temp <- temp[[1]]
+temp %<>% dplyr::select(submitter_id.samples, ss.TotalScore, directional_Zsum) %>% set_colnames(c('submitter_id.samples', 'sig63.ss', 'sig63.zsum'))
+##merge
+cur %<>% merge(., temp, by = 'submitter_id.samples')
+## Plot singscore elife vs singscore 63
+ggscatter(cur, x='elife.ss', y='sig63.ss',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+## Determine if the high scoring samples are the same in both scores
+cur %<>% 
+  mutate(elife_sub = ifelse(elife.ss >= quantile(elife.ss)[4], 'elife_hi', 'elife_lo')) %>%
+  mutate(sig63_sub = ifelse(sig63.ss >= quantile(sig63.ss)[4], 'sig63_hi', 'sig63_lo'))
+table(cur$elife_sub, cur$sig63_sub)
 
 
 ```
