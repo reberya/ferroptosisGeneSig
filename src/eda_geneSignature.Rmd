@@ -639,6 +639,30 @@ table(topGenes %in% rownames(sig_24h_sub))
 
 ```
 
+## See how the gene signature derived from the 24h clue samples captures genes reported in crappy lit-pulled gene sig papers
+306 gene signature captures 9/60 genes reported in lit-pulled 60 gene signature. 57/60 measured in clue datasest
+306 gene signature captures 10/149 genes reported in lit-pulled 60 gene signature. 130/149 measured in clue datasest
+```{r}
+
+# Taken from PMID: 32760210
+# A Novel Ferroptosis-related Gene Signature for Overall Survival Prediction in Patients with Hepatocellular Carcinoma (Liang et al 2020)
+# Basically same signature used for 3 other papers; 60 genes
+litGenes <- readxl::read_xls('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/pmid_ 32760210/Table S1.xls')
+
+table(litGenes$`Ferrotosis-related genes` %in% clue.erastin$pr_gene_symbol)
+table(litGenes$`Ferrotosis-related genes` %in% rownames(sig_24h))
+table(litGenes$`Ferrotosis-related genes` %in% rownames(sig_24h_sub))
+
+# Taken from DOI:https://doi.org/10.1016/j.omto.2021.02.011
+# Systematic profiling of ferroptosis gene signatures predicts prognostic factors in esophageal squamous cell carcinoma (Lu et al 2021)
+litGenes <- readxl::read_xlsx('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.1016_j.omto.2021.02.11/mmc2.xlsx', skip = 1)
+
+table(litGenes$Symbol %in% clue.erastin$pr_gene_symbol)
+table(litGenes$Symbol %in% rownames(sig_24h))
+table(litGenes$Symbol %in% rownames(sig_24h_sub))
+
+```
+
 ## save gene signature
 ```{r}
 temp <- sig_24h 
@@ -1344,6 +1368,274 @@ go_analysis(genes = temp$entrezgene_id, universe = universe, sig_name = '96 gene
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+# Examine how elife, and other alternative gene signatures look within clue data
+
+## Elife gene signature
+### Select the elife genes and order for the heatmap
+```{r}
+
+topGenes <- c('CHAC1', 'DDIT4', 'LOC284561', 'ASNS', 'TSC22D3', 'DDIT3', 'JDP2', 'SESN2',
+              'SLC1A4', 'PCK2', 'SLC7A11', 'TXNIP', 'VLDLR', 'GPT2', 'PSAT1', 'C9ORF150',
+              'SLC7A5', 'HERPUD1', 'XBP1', 'ATF3', 'SLC3A2', 'CBS', 'ATF4', 'ZNF419', 
+              'KLHL24', 'TRIB3', 'ZNF643', 'ATP6V1G2', 'VEGFA', 'GDF15', 'TUBE1', 
+              'ARRDC3', 'CEBPG', 'SNORA16A', 'RGS4', 'MUTED-TXNDC5', 'LOC390705')
+
+# select genes
+rna.elife <- rna %>% dplyr::filter(rownames(.) %in% topGenes)
+clue.erastin_6h_5um.elife <- clue.erastin_6h_5um %>% dplyr::filter(rownames(.) %in% topGenes)
+clue.erastin_24h_10um.elife <- clue.erastin_24h_10um %>% dplyr::filter(rownames(.) %in% topGenes) 
+clue.erastin_24h_5um.elife <- clue.erastin_24h_5um %>% dplyr::filter(rownames(.) %in% topGenes)
+
+# Filter for genes present in clue dataset
+rna.elife %<>% dplyr::filter(rownames(.) %in% clue.erastin$pr_gene_symbol)
+
+# order
+#rna.elife <- rna.elife[order(match(rownames(rna.elife),rownames(elife))),]
+rna.elife %<>% dplyr::arrange(GSE104462_LFC)
+clue.erastin_6h_5um.elife <- clue.erastin_6h_5um.elife[order(match(rownames(clue.erastin_6h_5um.elife),rownames(rna.elife))),]
+clue.erastin_24h_10um.elife <- clue.erastin_24h_10um.elife[order(match(rownames(clue.erastin_24h_10um.elife),rownames(rna.elife))),]
+clue.erastin_24h_5um.elife <- clue.erastin_24h_5um.elife[order(match(rownames(clue.erastin_24h_5um.elife),rownames(rna.elife))),]
+
+
+
+```
+
+### Plot elife gene signature in all data sets
+Row ordering is based on clustering algorithm
+```{r}
+
+# row split
+up <- table(rna.elife$GSE104462_LFC > 0)[2]
+down <- table(rna.elife$GSE104462_LFC > 0)[1]
+
+set.seed(11)
+Heatmap(rna.elife[,1:3],
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = 'RNA-seq',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F,
+        row_split = c(rep('down', down), rep('up', up)),
+        na_col = 'black',
+        cluster_rows = T) +
+  
+Heatmap(clue.erastin_6h_5um.elife,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_title = 'Clue-Erastin 5um-6h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F,
+        clustering_method_columns = 'complete') +
+  
+Heatmap(clue.erastin_24h_5um.elife,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = '5um-24h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F) +
+  
+  Heatmap(clue.erastin_24h_10um.elife,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = '10um-24h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F)
+
+```
+
+
+## 60 gene lit pulled ferroptosis gene signature
+### Select the elife genes and order for the heatmap
+```{r}
+
+# Taken from PMID: 32760210
+# A Novel Ferroptosis-related Gene Signature for Overall Survival Prediction in Patients with Hepatocellular Carcinoma (Liang et al 2020)
+# Basically same signature used for 3 other papers; 60 genes
+litGenes <- readxl::read_xls('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/pmid_ 32760210/Table S1.xls')
+litGenes <- litGenes$`Ferrotosis-related genes`
+
+
+# select genes
+rna.other60 <- rna %>% dplyr::filter(rownames(.) %in% litGenes)
+clue.erastin_6h_5um.other60 <- clue.erastin_6h_5um %>% dplyr::filter(rownames(.) %in% litGenes)
+clue.erastin_24h_10um.other60 <- clue.erastin_24h_10um %>% dplyr::filter(rownames(.) %in% litGenes) 
+clue.erastin_24h_5um.other60 <- clue.erastin_24h_5um %>% dplyr::filter(rownames(.) %in% litGenes)
+
+# Filter for genes present in clue dataset
+rna.other60 %<>% dplyr::filter(rownames(.) %in% clue.erastin$pr_gene_symbol)
+
+# order
+#rna.other60 <- rna.other60[order(match(rownames(rna.other60),rownames(elife))),]
+rna.other60 %<>% dplyr::arrange(GSE104462_LFC)
+clue.erastin_6h_5um.other60 <- clue.erastin_6h_5um.other60[order(match(rownames(clue.erastin_6h_5um.other60),rownames(rna.other60))),]
+clue.erastin_24h_10um.other60 <- clue.erastin_24h_10um.other60[order(match(rownames(clue.erastin_24h_10um.other60),rownames(rna.other60))),]
+clue.erastin_24h_5um.other60 <- clue.erastin_24h_5um.other60[order(match(rownames(clue.erastin_24h_5um.other60),rownames(rna.other60))),]
+
+
+
+```
+
+### Plot other 60 lit pulled  gene signature in all data sets
+Row ordering is based on clustering algorithm
+```{r}
+
+# row split
+up <- table(rna.other60$GSE104462_LFC > 0)[2]
+down <- table(rna.other60$GSE104462_LFC > 0)[1]
+
+set.seed(11)
+Heatmap(rna.other60[,1:3],
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = 'RNA-seq',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F,
+        row_split = c(rep('down', down), rep('up', up)),
+        na_col = 'black',
+        cluster_rows = T) +
+  
+Heatmap(clue.erastin_6h_5um.other60,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_title = 'Clue-Erastin 5um-6h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F,
+        clustering_method_columns = 'complete') +
+  
+Heatmap(clue.erastin_24h_5um.other60,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = '5um-24h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F) +
+  
+  Heatmap(clue.erastin_24h_10um.other60,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = '10um-24h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F)
+
+```
+
+
+
+
+
+## 149 gene lit pulled ferroptosis gene signature
+### Select the elife genes and order for the heatmap
+```{r}
+
+# Taken from DOI:https://doi.org/10.1016/j.omto.2021.02.011
+# Systematic profiling of ferroptosis gene signatures predicts prognostic factors in esophageal squamous cell carcinoma (Lu et al 2021)
+litGenes <- readxl::read_xlsx('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.1016_j.omto.2021.02.11/mmc2.xlsx', skip = 1)
+litGenes <- litGenes$Symbol
+
+# Remove IFNg and CDO1 because not present in any of the RNA-seq datasets
+litGenes <- litGenes[!litGenes %in% c('IFNG', 'CDO1')]
+
+# select genes
+rna.other149 <- rna %>% dplyr::filter(rownames(.) %in% litGenes)
+clue.erastin_6h_5um.other149 <- clue.erastin_6h_5um %>% dplyr::filter(rownames(.) %in% rownames(rna.other149))
+clue.erastin_24h_10um.other149 <- clue.erastin_24h_10um %>% dplyr::filter(rownames(.) %in% rownames(rna.other149)) 
+clue.erastin_24h_5um.other149 <- clue.erastin_24h_5um %>% dplyr::filter(rownames(.) %in% rownames(rna.other149))
+
+# Filter for genes present in clue dataset
+rna.other149 %<>% dplyr::filter(rownames(.) %in% clue.erastin$pr_gene_symbol)
+
+# order
+#rna.other149 <- rna.other149[order(match(rownames(rna.other149),rownames(elife))),]
+rna.other149 %<>% dplyr::arrange(GSE104462_LFC)
+clue.erastin_6h_5um.other149 <- clue.erastin_6h_5um.other149[order(match(rownames(clue.erastin_6h_5um.other149),rownames(rna.other149))),]
+clue.erastin_24h_10um.other149 <- clue.erastin_24h_10um.other149[order(match(rownames(clue.erastin_24h_10um.other149),rownames(rna.other149))),]
+clue.erastin_24h_5um.other149 <- clue.erastin_24h_5um.other149[order(match(rownames(clue.erastin_24h_5um.other149),rownames(rna.other149))),]
+
+
+
+```
+
+### Plot other 149 lit pulled gene signature in all data sets
+Row ordering is based on clustering algorithm
+```{r}
+
+# row split
+up <- table(rna.other149$GSE104462_LFC > 0)[2]
+down <- table(rna.other149$GSE104462_LFC > 0)[1]
+
+
+set.seed(11)
+Heatmap(rna.other149[,1:3],
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = 'RNA-seq',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F,
+        row_split = c(rep('down', down), rep('up', up)),
+        na_col = 'black',
+        cluster_rows = T) +
+  
+Heatmap(clue.erastin_6h_5um.other149,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        row_names_gp = gpar(fontsize = 5),
+        column_names_gp = gpar(fontsize = 7),
+        column_title = 'Clue-Erastin 5um-6h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F,
+        clustering_method_columns = 'complete') +
+  
+Heatmap(clue.erastin_24h_5um.other149,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = '5um-24h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F) +
+  
+  Heatmap(clue.erastin_24h_10um.other149,
+        show_column_dend = F,
+        show_row_dend = F,
+        show_row_names = F,
+        column_names_gp = gpar(fontsize = 7),
+        column_title = '10um-24h',
+        column_title_gp = gpar(fontsize = 8),
+        show_heatmap_legend = F)
+
+```
 
 
 
