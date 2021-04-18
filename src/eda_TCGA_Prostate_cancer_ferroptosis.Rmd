@@ -473,6 +473,14 @@ ggscatter(cur, x='ss.TotalScore', y='GDF15',
           conf.int = T) +
   stat_cor(method = "pearson")
 
+# CAFs with Alox15
+ggscatter(cur, x='CAFs', y='ALOX15B',
+          add='reg.line',
+          add.params = list(color='blue', fill='lightgray'),
+          conf.int = T) +
+  stat_cor(method = "pearson")
+
+
 ```
 
 ### Correlation with cell proportions
@@ -544,7 +552,6 @@ ggscatter(cur, x='ss.TotalScore', y='otherCells',
           add.params = list(color='blue', fill='lightgray'),
           conf.int = T) +
   stat_cor(method = "pearson")
-
 
 ```
 
