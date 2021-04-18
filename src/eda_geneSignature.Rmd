@@ -37,6 +37,8 @@ library('ComplexHeatmap')
 library(circlize)
 library('cowplot')
 library('ggfortify')
+#devtools::install_github("yanlinlin82/ggvenn")
+library(ggvenn)
 
 ```
 
@@ -642,26 +644,66 @@ table(topGenes %in% rownames(sig_24h_sub))
 ## See how the gene signature derived from the 24h clue samples captures genes reported in crappy lit-pulled gene sig papers
 306 gene signature captures 9/60 genes reported in lit-pulled 60 gene signature. 57/60 measured in clue datasest
 306 gene signature captures 10/149 genes reported in lit-pulled 60 gene signature. 130/149 measured in clue datasest
+60 lit-pulled gene signature captures 3/37 genes reported in elife gene signature
+149 lit-pulled gene signature captures 7/37 genes reported in elife gene signature
+149 lit-pulled gene signature captures 48/60 genes reported in 60 lit pulled gene signature
+
 ```{r}
 
 # Taken from PMID: 32760210
 # A Novel Ferroptosis-related Gene Signature for Overall Survival Prediction in Patients with Hepatocellular Carcinoma (Liang et al 2020)
 # Basically same signature used for 3 other papers; 60 genes
-litGenes <- readxl::read_xls('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/pmid_ 32760210/Table S1.xls')
+litGenes60 <- readxl::read_xls('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/pmid_ 32760210/Table S1.xls')
+litGenes60 <- litGenes60$`Ferrotosis-related genes`
 
-table(litGenes$`Ferrotosis-related genes` %in% clue.erastin$pr_gene_symbol)
-table(litGenes$`Ferrotosis-related genes` %in% rownames(sig_24h))
-table(litGenes$`Ferrotosis-related genes` %in% rownames(sig_24h_sub))
+# genes in clue dataset
+table(litGenes60 %in% clue.erastin$pr_gene_symbol)
+# genes in 306gs
+table(litGenes60 %in% rownames(sig_24h))
+# genes in 63gs
+table(litGenes60 %in% rownames(sig_24h_sub))
+
+# genes in elife gs
+table(topGenes %in% litGenes60)
+
 
 # Taken from DOI:https://doi.org/10.1016/j.omto.2021.02.011
 # Systematic profiling of ferroptosis gene signatures predicts prognostic factors in esophageal squamous cell carcinoma (Lu et al 2021)
-litGenes <- readxl::read_xlsx('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.1016_j.omto.2021.02.11/mmc2.xlsx', skip = 1)
+litGenes149 <- readxl::read_xlsx('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.1016_j.omto.2021.02.11/mmc2.xlsx', skip = 1)
+litGenes149 <- litGenes149$Symbol
 
-table(litGenes$Symbol %in% clue.erastin$pr_gene_symbol)
-table(litGenes$Symbol %in% rownames(sig_24h))
-table(litGenes$Symbol %in% rownames(sig_24h_sub))
+# genes in clue dataset
+table(litGenes149 %in% clue.erastin$pr_gene_symbol)
+# genes in 306gs
+table(litGenes149 %in% rownames(sig_24h))
+# genes in 63gs
+table(litGenes149 %in% rownames(sig_24h_sub))
+
+# genes in elife gs
+table(topGenes %in% litGenes149)
+
+# genes in 60 lit pulled gs
+table(litGenes60 %in% litGenes149)
+
 
 ```
+
+## Create venn diagram of genes in common between signatures
+```{r}
+
+data = list(`306gs` = rownames(sig_24h), `Lit-pulled gs` = litGenes60, `elife gs` = topGenes)
+
+ggvenn(
+  data= data, 
+  fill_color = c("#0073C2FF", "#EFC000FF", "#868686FF"),
+  stroke_size = 0.5, set_name_size = 8,
+  show_percentage = F,
+  text_size = 8
+  )
+
+
+```
+
 
 ## save gene signature
 ```{r}
@@ -1472,15 +1514,15 @@ Heatmap(clue.erastin_24h_5um.elife,
 # Taken from PMID: 32760210
 # A Novel Ferroptosis-related Gene Signature for Overall Survival Prediction in Patients with Hepatocellular Carcinoma (Liang et al 2020)
 # Basically same signature used for 3 other papers; 60 genes
-litGenes <- readxl::read_xls('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/pmid_ 32760210/Table S1.xls')
-litGenes <- litGenes$`Ferrotosis-related genes`
+litGenes60 <- readxl::read_xls('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/pmid_ 32760210/Table S1.xls')
+litGenes60 <- litGenes60$`Ferrotosis-related genes`
 
 
 # select genes
-rna.other60 <- rna %>% dplyr::filter(rownames(.) %in% litGenes)
-clue.erastin_6h_5um.other60 <- clue.erastin_6h_5um %>% dplyr::filter(rownames(.) %in% litGenes)
-clue.erastin_24h_10um.other60 <- clue.erastin_24h_10um %>% dplyr::filter(rownames(.) %in% litGenes) 
-clue.erastin_24h_5um.other60 <- clue.erastin_24h_5um %>% dplyr::filter(rownames(.) %in% litGenes)
+rna.other60 <- rna %>% dplyr::filter(rownames(.) %in% litGenes60)
+clue.erastin_6h_5um.other60 <- clue.erastin_6h_5um %>% dplyr::filter(rownames(.) %in% litGenes60)
+clue.erastin_24h_10um.other60 <- clue.erastin_24h_10um %>% dplyr::filter(rownames(.) %in% litGenes60) 
+clue.erastin_24h_5um.other60 <- clue.erastin_24h_5um %>% dplyr::filter(rownames(.) %in% litGenes60)
 
 # Filter for genes present in clue dataset
 rna.other60 %<>% dplyr::filter(rownames(.) %in% clue.erastin$pr_gene_symbol)
@@ -1558,14 +1600,14 @@ Heatmap(clue.erastin_24h_5um.other60,
 
 # Taken from DOI:https://doi.org/10.1016/j.omto.2021.02.011
 # Systematic profiling of ferroptosis gene signatures predicts prognostic factors in esophageal squamous cell carcinoma (Lu et al 2021)
-litGenes <- readxl::read_xlsx('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.1016_j.omto.2021.02.11/mmc2.xlsx', skip = 1)
-litGenes <- litGenes$Symbol
+litGenes149 <- readxl::read_xlsx('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/doi_10.1016_j.omto.2021.02.11/mmc2.xlsx', skip = 1)
+litGenes149 <- litGenes149$Symbol
 
 # Remove IFNg and CDO1 because not present in any of the RNA-seq datasets
-litGenes <- litGenes[!litGenes %in% c('IFNG', 'CDO1')]
+litGenes149 <- litGenes149[!litGenes149 %in% c('IFNG', 'CDO1')]
 
 # select genes
-rna.other149 <- rna %>% dplyr::filter(rownames(.) %in% litGenes)
+rna.other149 <- rna %>% dplyr::filter(rownames(.) %in% litGenes149)
 clue.erastin_6h_5um.other149 <- clue.erastin_6h_5um %>% dplyr::filter(rownames(.) %in% rownames(rna.other149))
 clue.erastin_24h_10um.other149 <- clue.erastin_24h_10um %>% dplyr::filter(rownames(.) %in% rownames(rna.other149)) 
 clue.erastin_24h_5um.other149 <- clue.erastin_24h_5um %>% dplyr::filter(rownames(.) %in% rownames(rna.other149))
