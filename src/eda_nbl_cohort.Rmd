@@ -67,7 +67,8 @@ nbl %<>% set_rownames(nbl$gene_name) %>%
   as.data.frame()
 
 # Load the clinical data
-temp <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/nbl_cohort/release/ForRyan/20210403_ForRyan_2021_0403_nbl_rnaseq.txt', data.table = F)
+#temp <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/nbl_cohort/release/ForRyan/20210403_ForRyan_2021_0403_nbl_rnaseq.txt', data.table = F)
+temp <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/nbl_cohort/release/ForRyan/2021_0416_nbl_ryan.txt', data.table = F)
 
 # Merge dataframes for downstream use
 nbl <- merge(temp, nbl, by.x = 'rlib', by.y = 0)
@@ -88,7 +89,7 @@ nbl %<>%
   ## Filter for the 'capt' RNA capture method
   dplyr::filter(r.capture == 'capt') %>%
   ## filter for nonzero purity of RNA
-  dplyr::filter(purity > 0) %>%
+  dplyr::filter(purity > quantile(purity)[3]) %>%
   ## Combine timepoint refrel and relapse variables
   dplyr::mutate(timepoint = ifelse(timepoint %in% c('refrel', 'relapse'), 'rel_ref', timepoint)) %>%
   ## Generalize the timepoint variables
@@ -166,26 +167,26 @@ https://bioconductor.org/packages/devel/bioc/vignettes/singscore/inst/doc/singsc
 - Sum z scores of upregulated genes + -1*(Sum of Z scores of downregulated genes)
 ```{r}
 
-# nbl_df - the cleaned nbl dataframe from above
+# DF - the cleaned nbl dataframe from above
 # upGenes - list of genes upregulated in gene signature
-# downGenes - list of genes downregulated in gene signature
-# metacols - the columns of metadata within nbl_df
+# DOWNGENES - list of genes downregulated in gene signature
+# METACOLS - the columns of metadata within DF
 
-calculate_signature_scores <- function(nbl_df = nbl, upGenes, downGenes, metacols = 1:30){
+calculate_signature_scores <- function(DF = nbl, UPGENES, DOWNGENES, METACOLS = 1:33){
   
   # create temp dataframe
-  cnts <- nbl_df %>% set_rownames(paste0('Sample_', 1:length(nbl_df$rlib)))
+  cnts <- DF %>% set_rownames(paste0('Sample_', 1:length(DF$rlib)))
   
   # Score samples using singScore and merge
   ## score
-  rankData <- cnts %>% dplyr::select(-metacols) %>%  t() %>% rankGenes()
-  if(!is.null(upGenes) & !is.null(downGenes)){
-    scoredf <- simpleScore(rankData, upSet = upGenes, downSet = downGenes)
-  } else if(is.null(upGenes) & !is.null(downGenes)) {
-    scoredf <- simpleScore(rankData, downSet = downGenes)
+  rankData <- cnts %>% dplyr::select(-METACOLS) %>%  t() %>% rankGenes()
+  if(!is.null(UPGENES) & !is.null(DOWNGENES)){
+    scoredf <- simpleScore(rankData, upSet = UPGENES, downSet = DOWNGENES)
+  } else if(is.null(UPGENES) & !is.null(DOWNGENES)) {
+    scoredf <- simpleScore(rankData, downSet = DOWNGENES)
     print('Only DOWN geneset is valid')
-  } else if(!is.null(upGenes) & is.null(downGenes)) {
-    scoredf <- simpleScore(rankData, upSet = upGenes)
+  } else if(!is.null(UPGENES) & is.null(DOWNGENES)) {
+    scoredf <- simpleScore(rankData, upSet = UPGENES)
     print('Only UP geneset is valid')
   } else {
     print('Both gene sets NULL')
@@ -198,7 +199,7 @@ calculate_signature_scores <- function(nbl_df = nbl, upGenes, downGenes, metacol
   
   
   # Calcluate nondirectional z scores 
-  temp <- apply(cnts[,c(upGenes, downGenes)], 2, scale)
+  temp <- apply(cnts[,c(UPGENES, DOWNGENES)], 2, scale)
   temp$nondirectional_Zsum <- rowSums(abs(temp))
   ## Add Z score to dataframe 
   cnts$nondirectional_Zsum <- temp$nondirectional_Zsum
@@ -206,7 +207,7 @@ calculate_signature_scores <- function(nbl_df = nbl, upGenes, downGenes, metacol
   
   # Calculate directional Z scores
   ## Upregulated genes
-  temp <- apply(cnts %>% dplyr::select(all_of(upGenes)), 2, scale)
+  temp <- apply(cnts %>% dplyr::select(all_of(UPGENES)), 2, scale)
   if(!is_empty(temp)) {
     temp$upZsum <- rowSums(temp)
     ## Add Z score to dataframe 
@@ -215,7 +216,7 @@ calculate_signature_scores <- function(nbl_df = nbl, upGenes, downGenes, metacol
     cnts$upZsum <- 0
   }
   ## Downregulated genes
-  temp <- apply(cnts %>% dplyr::select(all_of(downGenes)), 2, scale)
+  temp <- apply(cnts %>% dplyr::select(all_of(DOWNGENES)), 2, scale)
   if(!is_empty(temp)) {
     temp$downZsum <- rowSums(temp)
     ## Add Z score to dataframe 
@@ -225,7 +226,7 @@ calculate_signature_scores <- function(nbl_df = nbl, upGenes, downGenes, metacol
   }
   
   # Select columns
-  cnts %<>% dplyr::select(metacols, all_of(nms), upZsum, downZsum)
+  cnts %<>% dplyr::select(METACOLS, all_of(nms), upZsum, downZsum)
   cnts %<>% mutate(directional_Zsum = upZsum + (downZsum * -1)) %>%
     dplyr::select(-Row.names)
   
@@ -281,9 +282,9 @@ make_plots <- function(
   ####################
   # Calclulate scores
   ####################
-  scores <- calculate_signature_scores(nbl_df = DF, 
-                                   upGenes = UPGENES,
-                                   downGenes = DOWNGENES)
+  scores <- calculate_signature_scores(DF = DF, 
+                                   UPGENES = UPGENES,
+                                   DOWNGENES = DOWNGENES)
   
   ####################
   # Boxplot 
@@ -303,9 +304,10 @@ make_plots <- function(
     geom_boxplot(outlier.shape = NA) +
     geom_jitter(alpha=0.6, width=0.15) +
     theme_bw(base_size=16) +
-    labs(subtitle=paste0("SingScore by Risk group in dxprim: ", TITLE)) +
+    labs(subtitle=TITLE) +
     stat_compare_means(method = STAT_TEST) +
-    xlab(NULL)
+    xlab(NULL) +
+    theme(axis.text.x=element_text(angle = -90, hjust = 0))
   
   # Plot 
   # b2 <- scores %>% ggplot(aes(x=get(COMP), y=nondirectional_Zsum)) + 
@@ -317,15 +319,15 @@ make_plots <- function(
   #   xlab(NULL)
   
   # Plot 
-  b3 <- scores %>% ggplot(aes(x=get(COMP), y=directional_Zsum)) +
-    geom_boxplot(outlier.shape = NA) +
-    geom_jitter(alpha=0.6, width=0.15) +
-    theme_bw(base_size=16) +
-    labs(subtitle=paste0("Directional Z score by Risk group in dxprim: ", TITLE)) +
-    stat_compare_means(method = STAT_TEST) +
-    xlab(NULL)
+  # b3 <- scores %>% ggplot(aes(x=get(COMP), y=directional_Zsum)) +
+  #   geom_boxplot(outlier.shape = NA) +
+  #   geom_jitter(alpha=0.6, width=0.15) +
+  #   theme_bw(base_size=16) +
+  #   labs(subtitle=paste0("Directional Z score by Risk group in dxprim: ", TITLE)) +
+  #   stat_compare_means(method = STAT_TEST) +
+  #   xlab(NULL)
   
-  return(list(scores,a,b1,b3))
+  return(list(scores,a,b1))
   
 }
 
@@ -373,21 +375,21 @@ cur <- make_plots(
 
 # Plot distribution of sing score
 cur[3]
-cur[4]
+#cur[4]
 
 # Look at correlation of singscore with SLC levels
 cur <- cur[[1]]
 cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
   merge(., nbl, by = 'rlib')
 
-# singScore with SLC3A2 expression
+# 306gs singScore with SLC3A2 expression
 ggscatter(cur, x='ss.TotalScore', y='SLC3A2',
           add='reg.line',
           add.params = list(color='blue', fill='lightgray'),
           conf.int = T) +
   stat_cor(method = "pearson")
 
-# singScore with SLC7A11
+# 306gs singScore with SLC7A11
 ggscatter(cur, x='ss.TotalScore', y='SLC7A11',
           add='reg.line',
           add.params = list(color='blue', fill='lightgray'),
@@ -395,18 +397,18 @@ ggscatter(cur, x='ss.TotalScore', y='SLC7A11',
   stat_cor(method = "pearson")
 
 # Directional Z sum with SLC3A2
-ggscatter(cur, x='directional_Zsum', y='SLC3A2',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
+# ggscatter(cur, x='directional_Zsum', y='SLC3A2',
+#           add='reg.line',
+#           add.params = list(color='blue', fill='lightgray'),
+#           conf.int = T) +
+#   stat_cor(method = "pearson")
 
 # Directional Z sum with SLC7A11
-ggscatter(cur, x='directional_Zsum', y='SLC7A11',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
+# ggscatter(cur, x='directional_Zsum', y='SLC7A11',
+#           add='reg.line',
+#           add.params = list(color='blue', fill='lightgray'),
+#           conf.int = T) +
+#   stat_cor(method = "pearson")
 
 # SLC7A11 vs SLC3A2
 ggscatter(cur, x='SLC3A2', y='SLC7A11',
@@ -445,7 +447,7 @@ cur <- make_plots(
   TITLE = 'NK gene sig')
 cur[[3]]
 nk.ss <- cur[[1]]
-nk.ss %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
+nk.ss.sub <- nk.ss %>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
   set_colnames(c('rlib', 'nk.ss.TotalScore', 'nk.directional_Zsum'))
 
 # get sig306 gene sig
@@ -461,14 +463,22 @@ cur <- make_plots(
 # Look at correlation of singscore with NK score levels
 cur <- cur[[1]]
 cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
-  merge(., nk.ss, by = 'rlib')
-
+  merge(., nk.ss.sub, by = 'rlib')
 ggscatter(cur, x='ss.TotalScore', y='nk.ss.TotalScore',
           add='reg.line',
           add.params = list(color='blue', fill='lightgray'),
           conf.int = T) +
   stat_cor(method = "pearson")
 
+# View NK score vs Dinutux ever
+nk.ss %<>% mutate(comp = ifelse(dinutx_ever ==1, 'yes', 'no'))
+nk.ss %>% ggplot(aes(x=comp, y=ss.TotalScore)) + 
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(alpha=0.6, width=0.15) +
+    theme_bw(base_size=16) +
+    labs(subtitle='NK score vs Dinutux ever') +
+    stat_compare_means(method = 'wilcox.test') +
+    xlab(NULL)
 
 ```
 
@@ -583,7 +593,30 @@ ggscatter(comb, x='ss.TotalScore', y='otherCells',
 
 ```
 
-### 306 gene signature for LR/IR/HR
+### Look for factors common for the highest quartile ferroptosis scores
+```{r}
+
+# get df of scores
+cur <- make_plots(
+  DF = nbl,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'dxprim', 
+  STAT_TEST = 'anova',
+  TITLE = '306gs: ')
+
+dat <- cur[[1]] %>%
+  mutate(ss.quartile = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(ss.quartile = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, ss.quartile)) %>%
+  mutate(ss.quartile = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, ss.quartile)) 
+
+#View(dat %>% dplyr::filter(ss.quartile == 4))
+
+
+```
+
+### 306 gene signature for LR vs IR vs HR
 ```{r}
 
 # Define comparison
@@ -597,26 +630,65 @@ cur <- make_plots(
   COMP = 'comp', 
   TIMEPOINT = 'dxprim', 
   STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: LR/IR/HR')
 
 # plot and get df
 cur[2]
 cur[3]
 #cur[4]
-cur <- cur[[1]]
+# cur <- cur[[1]]
 
 # select HR and group into 2 subgroups seen
-cur %<>% dplyr::filter(comp == 'HR') %>%
-  mutate(subset = ifelse(ss.TotalScore > quantile(ss.TotalScore)[4], 'sub_hi', 'sub_lo'))
+# cur %<>% dplyr::filter(comp == 'HR') %>%
+#   mutate(subset = ifelse(ss.TotalScore > quantile(ss.TotalScore)[4], 'sub_hi', 'sub_lo'))
 
 # table vars of interest - proportions
-prop.table(table(cur$subset, cur$timepoint), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
-prop.table(table(cur$subset, cur$dinuresp_old), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
-prop.table(table(cur$subset, cur$dinu_treat_prepost), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
-prop.table(table(cur$subset, cur$site), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
+# prop.table(table(cur$subset, cur$timepoint), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
+# prop.table(table(cur$subset, cur$dinuresp_old), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
+# prop.table(table(cur$subset, cur$dinutx_ever), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
+# prop.table(table(cur$subset, cur$site), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
 
 # Raw values
-table(cur$dinu_treat_prepost, cur$subset) %>% barplot(beside=T, legend=rownames(.))
+# table(cur$dinutx_ever, cur$subset) %>% barplot(beside=T, legend=rownames(.))
+
+
+```
+
+### 306 gene signature for LR vs HR and LR/IR vs HR
+```{r}
+
+# Define comparison
+dat <- nbl %>% dplyr::filter(group %in% c('HR', 'LR'))
+
+# get PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'dxprim', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '306gs: LR vs HR')
+
+# plot 
+cur[3]
+
+
+# Define comparison
+nbl$comp <- ifelse(nbl$group %in% c('LR', 'IR'), 'LR/IR', nbl$group)
+
+# get PCA and boxplots
+cur <- make_plots(
+  DF = nbl,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'dxprim', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '306gs: LR/IR vs HR')
+
+# plot 
+cur[3]
 
 
 ```
@@ -636,7 +708,7 @@ cur <- make_plots(
   COMP = 'comp', 
   TIMEPOINT = 'dxprim', 
   STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: Dinutux response among HR')
 
 # plot and get df
 cur[2]
@@ -661,7 +733,7 @@ cur <- make_plots(
   COMP = 'comp', 
   TIMEPOINT = 'dxprim', 
   STAT_TEST = 'wilcox.test',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: Dinutux response 1v2/3/4')
 
 # plot and get df
 cur[2]
@@ -670,12 +742,36 @@ cur[3]
 
 ```
 
-### 306 gene signature for Dinutuxumab response pre/post Dinituximab
+### 306 gene signature for ever received Dinutuximab
 ```{r}
 
 # Define comparison
-nbl$comp <- nbl$dinu_treat_prepost
-dat <- nbl %>% dplyr::mutate(comp = ifelse(!comp %in% c('postDIN', 'preDIN'), 'noDIN', comp))
+nbl$comp <- nbl$dinutx_ever
+dat <- nbl %>% mutate(comp = ifelse(comp == 1, '+Dinutux', '-Dinutux'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '306gs: Ever recieved dinutux')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 306 gene signature for dinutuximab during upfront maitenance therapy
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$ufmdinu
+dat <- nbl 
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -685,7 +781,7 @@ cur <- make_plots(
   COMP = 'comp', 
   TIMEPOINT = 'all', 
   STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
+  TITLE = '306gs: Dinutux during upfront mait.')
 
 # plot and get df
 
@@ -694,12 +790,41 @@ cur[3]
 
 ```
 
-### 306 gene signature for Dinutuxumab response post-DIN vs all other
+### 306 gene signature for tissue of origin
 ```{r}
 
 # Define comparison
-nbl$comp <- nbl$dinu_treat_prepost
-dat <- nbl %>% dplyr::mutate(comp = ifelse(!comp %in% c('postDIN'), 'no/preDin', comp))
+dat <- nbl %>%
+  mutate(comp = ifelse(tissue_combined %in% c('bone', 'bone.marrow'), 'bone(marrow)', tissue_combined)) %>%
+  mutate(comp = ifelse(tissue_combined %in% c('brain', 'cervical mass', 'cranial mass'), 'cranial/cervical', comp)) %>%
+  mutate(comp = ifelse(tissue_combined %in% c('peritoneal mass', 'retroperitoneal mass'), '(retro)peritoneal', comp))
+  
+  
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'anova',
+  TITLE = '306gs: By tissue of origin')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+
+### 306 gene signature for rl.rf.pd (relapse/refractory dissease after upfront therapy)
+```{r}
+
+# Define comparison
+nbl$comp <- nbl$rl.rf.pd
+dat <- nbl%>% dplyr::filter(comp %in% c('Y', 'N'))
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -718,34 +843,58 @@ cur[3]
 
 ```
 
-### 306 gene signature for Dinutuxumab response post-DIN vs all other - split by response
+### 306 gene signature for rl.rf.pd (relapse/refractory dissease after upfront therapy) in context of ufm dinutux
 ```{r}
 
+#Of the patients who did not receive UFM dinu, how many had refractory, relapse or progressive disease?
+#Of the patients who received UFM dinu, how many had refractory, relapse or progressive disease?
+
+
 # Define comparison
-nbl$comp <- nbl$dinu_treat_prepost
-dat <- nbl %>% dplyr::mutate(comp = ifelse(!comp %in% c('postDIN'), 'no/preDin', comp))
+nbl$comp <- paste0(nbl$ufmdinu, '_', nbl$rl.rf.pd)
+dat <- nbl 
 
-# calculate scores
-scores <- calculate_signature_scores(nbl_df = dat, 
-                                     upGenes = sig306_up,
-                                     downGenes = sig306_dn)
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
 
+# plot and get df
 
-scores %<>% mutate(dinuresp_old = ifelse(dinuresp_old %in% c('group2', 'group3', 'group4'), 'group234', dinuresp_old)) %>%
-  dplyr::mutate(dinuresp_old=ifelse(dinuresp_old %in% c('nothr', 'pending'), 'nothr/pending', dinuresp_old))
+cur[3]
+#cur[4]
 
-scores %<>% mutate(dinutx = ifelse(dinutx == 0, 'no dinutux', '+dinutux'))
+```
 
+### 306 gene signature for RLRF Dinutux treatment (how many developed refractory dx)
+```{r}
 
-# Plot 
-# scores %<>% dplyr::filter(dinutx == 1)
-scores %>% ggplot(., aes(x=comp, y=ss.TotalScore, color=dinutx)) + 
-  geom_boxplot(color='black', outlier.shape = NA) +
-  geom_jitter(alpha=0.6, width=0.15) +
-  theme_bw(base_size=16) +
-  labs(subtitle="306gs by Dinutuximab status with dinutux response") +
-  xlab(NULL)
+# Within the group that was treated with RLRF Dinutuximab how many developed relapsed or refractory disease? 
 
+# generate comparison
+dat <- nbl[nbl$rl.rf.pd=="Y" & nbl$ufmdinu=="no",]
+table(dat$rl.rf.pd, dat$rlrfdinu)
+dat$comp <- dat$rlrfdinu
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  TIMEPOINT = 'all', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+
+# plot and get df
+
+cur[3]
+#cur[4]
 
 ```
 
@@ -831,131 +980,6 @@ autoplot(km_fit)
 
 ```
 
-### 306 gene signature for HR (1/234) with additional info on pre/post DIN
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$dinuresp_old
-nbl %<>% mutate(comp = ifelse(comp %in% c('group2', 'group3', 'group4'), 'group234', comp))
-dat <- nbl %>% dplyr::filter(!comp %in% c('pending'))
-
-# calculate scores
-scores <- calculate_signature_scores(nbl_df = dat, 
-                                     upGenes = sig306_up,
-                                     downGenes = sig306_dn)
-
-# Add 
-scores %<>% mutate(subset = ifelse(ss.TotalScore > quantile(ss.TotalScore)[4], 'sub_hi', 'sub_lo')) %>%
-  mutate(dinu_treat_prepost = ifelse(dinu_treat_prepost %in% c('postDIN', 'preDIN'), dinu_treat_prepost, 'unknown'))
-
-# Plot 
-# scores %<>% dplyr::filter(dinutx == 1)
-scores %>% ggplot(., aes(x=comp, y=ss.TotalScore, color=dinu_treat_prepost)) + 
-  geom_boxplot(color='black', outlier.shape = NA) +
-  geom_jitter(alpha=0.6, width=0.15) +
-  theme_bw(base_size=16) +
-  labs(subtitle="SingScore by Risk group in dxprim") +
-  xlab(NULL)
-
-```
-
-### 306 gene signature pre/post DIN; with quartiles of CD8 T cell level and Gini T cell index
-```{r}
-
-# Load T cell data
-epic <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/EPIC/NBL/cell_proportions/nbl_epic_proportions_all.txt', data.table = F) %>%
-  dplyr::select(rlib, Bcells:otherCells)
-tcr <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/nbl_cohort/other/nbl-crisp-canio_tcr-summary.csv', data.table = F)
-
-
-# Load gene sig scores
-cur <- make_plots(
-  DF = nbl,
-  UPGENES = sig306_up, 
-  DOWNGENES = sig306_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
-cur <- cur[[1]]
-
-# Combine T cell data with gene signature 
-comb <- unique(merge(cur, epic, by = 'rlib', all.x = T))
-comb <- merge(comb, tcr, by.x = 'rlib', by.y='sid', all.x=T)
-
-
-# Define comparison
-comb$comp <- comb$dinu_treat_prepost
-dat <- comb %>% dplyr::mutate(comp = ifelse(!comp %in% c('postDIN', 'preDIN'), 'noDIN', comp))
-
-
-# Quartile T cell levels
-dat %<>% mutate(quart_cd8 = ifelse(CD8_Tcells >= quantile(CD8_Tcells)[3], 3, 2)) %>%
-  mutate(quart_cd8 = ifelse(CD8_Tcells >= quantile(CD8_Tcells)[4], 4, quart_cd8)) %>%
-  mutate(quart_cd8 = ifelse(CD8_Tcells < quantile(CD8_Tcells)[2], 1, quart_cd8)) %>%
-  mutate(quart_cd8 = factor(quart_cd8))
-
-# Plot 
-dat %>% ggplot(., aes(x=comp, y=ss.TotalScore, color=quart_cd8)) + 
-  geom_boxplot(color='black', outlier.shape = NA) +
-  geom_jitter(alpha=0.6, width=0.15) +
-  theme_bw(base_size=16) +
-  labs(subtitle="SingScore: Biopsy time with response group") +
-  xlab(NULL)
-
-
-# Quartile T cell Gini index levels
-dat %<>% mutate(quart_giniT = ifelse(gini_T >= quantile(gini_T, na.rm = T)[3], 3, 2)) %>%
-  mutate(quart_giniT = ifelse(gini_T >= quantile(gini_T, na.rm = T)[4], 4, quart_giniT)) %>%
-  mutate(quart_giniT = ifelse(gini_T < quantile(gini_T, na.rm = T)[2], 1, quart_giniT)) %>%
-  mutate(quart_giniT = factor(quart_giniT))
-
-# Plot 
-dat %>% ggplot(., aes(x=comp, y=ss.TotalScore, color=quart_giniT)) + 
-  geom_boxplot(color='black', outlier.shape = NA) +
-  geom_jitter(alpha=0.6, width=0.15) +
-  theme_bw(base_size=16) +
-  labs(subtitle="SingScore: Biopsy time with response group") +
-  xlab(NULL)
-
-
-# Quartile T cell clone levels
-dat %<>% mutate(quart_Tclones = ifelse(clones_T >= quantile(clones_T, na.rm = T)[3], 3, 2)) %>%
-  mutate(quart_Tclones = ifelse(clones_T >= quantile(clones_T, na.rm = T)[4], 4, quart_Tclones)) %>%
-  mutate(quart_Tclones = ifelse(clones_T < quantile(clones_T, na.rm = T)[2], 1, quart_Tclones)) %>%
-  mutate(quart_Tclones = factor(quart_Tclones))
-
-# Plot 
-dat %>% ggplot(., aes(x=comp, y=ss.TotalScore, color=quart_Tclones)) + 
-  geom_boxplot(color='black', outlier.shape = NA) +
-  geom_jitter(alpha=0.6, width=0.15) +
-  theme_bw(base_size=16) +
-  labs(subtitle="SingScore: Biopsy time with response group") +
-  xlab(NULL)
-
-
-# Quartile ferroptosis score
-dat %<>% mutate(quart_score = ifelse(ss.TotalScore >= quantile(ss.TotalScore, na.rm = T)[3], 3, 2)) %>%
-  mutate(quart_score = ifelse(ss.TotalScore >= quantile(ss.TotalScore, na.rm = T)[4], 4, quart_score)) %>%
-  mutate(quart_score = ifelse(ss.TotalScore < quantile(ss.TotalScore, na.rm = T)[2], 1, quart_score)) %>%
-  mutate(quart_score = factor(quart_score))
-
-# Plot 
-dat %>% ggplot(., aes(x=quart_score, y=CD8_Tcells)) + 
-  geom_boxplot(color='black', outlier.shape = NA) +
-  geom_jitter(alpha=0.6, width=0.15) +
-  theme_bw(base_size=16) +
-  labs(subtitle="SingScore: Biopsy time with response group") +
-  stat_compare_means(method = 'anova') +
-  xlab(NULL)
-
-
-
-
-
-
-```
-
 
 ## 63 gene signature
 
@@ -974,173 +998,6 @@ sig63_dn <- sig63 %>%
   dplyr::filter(upregulated == F) %>% 
   dplyr::select(V1) %>% unlist()
 
-
-```
-
-### Distribution of 63 gene signature scores in all patients. Correlation with SLC levels
-```{r}
-
-# Define comparison
-nbl$comp <- 'all'
-
-# get PCA and boxplots
-cur <- make_plots(
-  DF = nbl,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
-
-# Plot distribution of sing score
-cur[4]
-
-# Look at correlation of singscore with SLC levels
-cur <- cur[[1]]
-cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
-  merge(., nbl, by = 'rlib')
-
-# Directional Z sum with SLC3A2
-ggscatter(cur, x='ss.TotalScore', y='SLC3A2',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# directinoal z sum with SLC7A11
-ggscatter(cur, x='ss.TotalScore', y='SLC7A11',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-```
-
-### Distribution of 63 gene signature scores in all patients. Correlation with SLC levels
-```{r}
-
-# Define comparison
-nbl$comp <- 'all'
-
-# get PCA and boxplots
-cur <- make_plots(
-  DF = nbl,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
-
-# Plot distribution of sing score
-cur[3]
-#cur[4]
-
-# Look at correlation of singscore with SLC levels
-cur <- cur[[1]]
-cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
-  merge(., nbl, by = 'rlib')
-cor(cur$ss.TotalScore, cur$SLC3A2)
-cor(cur$ss.TotalScore, cur$SLC7A11)
-cor(cur$directional_Zsum, cur$SLC3A2)
-cor(cur$directional_Zsum, cur$SLC7A11)
-
-
-```
-
-### 63 gene signature for LR/IR/HR
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$group
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = nbl,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'dxprim', 
-  STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
-### 63 gene signature for Dinutuxumab response among HR
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$dinuresp_old
-dat <- nbl %>% dplyr::filter(!comp %in% c('nothr', 'pending'))
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'dxprim', 
-  STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
-### 63 gene signature for Dinutuxumab response pre/post Dinituximab
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$dinu_treat_prepost
-dat <- nbl %>% dplyr::filter(comp %in% c('postDIN', 'preDIN'))
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 't.test',
-  TITLE = '63 gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
-### 63 gene signature for Dinutuxumab response post-DIN vs all other
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$dinu_treat_prepost
-dat <- nbl %>% dplyr::mutate(comp = ifelse(!comp %in% c('postDIN'), 'no/preDin', comp))
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 'wilcox.test',
-  TITLE = '306 gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
 
 ```
 
@@ -1165,109 +1022,6 @@ sig46_dn <- sig46 %>%
 
 ```
 
-### Distribution of 46 gene signature scores in all patients. Correlation with SLC levels
-```{r}
-
-# Define comparison
-nbl$comp <- 'all'
-
-# get PCA and boxplots
-cur <- make_plots(
-  DF = nbl,
-  UPGENES = sig46_up, 
-  DOWNGENES = sig46_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 'anova',
-  TITLE = '46 gene sig')
-
-# Plot distribution of sing score
-cur[3]
-#cur[4]
-
-# Look at correlation of singscore with SLC levels
-cur <- cur[[1]]
-cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
-  merge(., nbl, by = 'rlib')
-cor(cur$ss.TotalScore, cur$SLC3A2)
-cor(cur$ss.TotalScore, cur$SLC7A11)
-cor(cur$directional_Zsum, cur$SLC3A2)
-cor(cur$directional_Zsum, cur$SLC7A11)
-
-
-```
-
-### 46 gene signature for LR/IR/HR
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$group
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = nbl,
-  UPGENES = sig46_up, 
-  DOWNGENES = sig46_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'dxprim', 
-  STAT_TEST = 'anova',
-  TITLE = '46 gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
-### 46 gene signature for Dinutuxumab response among HR
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$dinuresp_old
-dat <- nbl %>% dplyr::filter(!comp %in% c('nothr', 'pending'))
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig46_up, 
-  DOWNGENES = sig46_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'dxprim', 
-  STAT_TEST = 'anova',
-  TITLE = '46 gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
-### 46 gene signature for Dinutuxumab response pre/post Dinituximab
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$dinu_treat_prepost
-dat <- nbl %>% dplyr::filter(comp %in% c('postDIN', 'preDIN'))
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig46_up, 
-  DOWNGENES = sig46_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 't.test',
-  TITLE = '46 gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
 
 ## 96 gene signature
 
@@ -1289,109 +1043,6 @@ sig96_dn <- sig96 %>%
 
 ```
 
-### Distribution of 96 gene signature scores in all patients. Correlation with SLC levels
-```{r}
-
-# Define comparison
-nbl$comp <- 'all'
-
-# get PCA and boxplots
-cur <- make_plots(
-  DF = nbl,
-  UPGENES = sig96_up, 
-  DOWNGENES = sig96_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 'anova',
-  TITLE = '96 gene sig')
-
-# Plot distribution of sing score
-cur[3]
-#cur[4]
-
-# Look at correlation of singscore with SLC levels
-cur <- cur[[1]]
-cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
-  merge(., nbl, by = 'rlib')
-cor(cur$ss.TotalScore, cur$SLC3A2)
-cor(cur$ss.TotalScore, cur$SLC7A11)
-cor(cur$directional_Zsum, cur$SLC3A2)
-cor(cur$directional_Zsum, cur$SLC7A11)
-
-
-```
-
-### 96 gene signature for LR/IR/HR
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$group
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = nbl,
-  UPGENES = sig96_up, 
-  DOWNGENES = sig96_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'dxprim', 
-  STAT_TEST = 'anova',
-  TITLE = '96 gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
-### 96 gene signature for Dinutuxumab response among HR
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$dinuresp_old
-dat <- nbl %>% dplyr::filter(!comp %in% c('nothr', 'pending'))
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig96_up, 
-  DOWNGENES = sig96_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'dxprim', 
-  STAT_TEST = 'anova',
-  TITLE = '96 gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
-### 96 gene signature for Dinutuxumab response pre/post Dinituximab
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$dinu_treat_prepost
-dat <- nbl %>% dplyr::filter(comp %in% c('postDIN', 'preDIN'))
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig96_up, 
-  DOWNGENES = sig96_dn, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 't.test',
-  TITLE = '96 gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
 
 ## Elife gene signature
 
@@ -1405,37 +1056,6 @@ elife_up <- c('CHAC1', 'DDIT4', 'LOC284561', 'ASNS', 'TSC22D3', 'DDIT3', 'JDP2',
               'ARRDC3', 'CEBPG')
 
 elife_down <- c('SNORA16A', 'RGS4', 'MUTED-TXNDC5', 'LOC390705')
-```
-
-### Distribution of elife gene signature scores in all patients. Correlation with SLC levels
-```{r}
-
-# Define comparison
-nbl$comp <- 'all'
-
-# get PCA and boxplots
-cur <- make_plots(
-  DF = nbl,
-  UPGENES = elife_up, 
-  DOWNGENES = elife_down, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 'anova',
-  TITLE = 'elife gene sig')
-
-# Plot distribution of sing score and directional z score
-cur[3]
-#cur[4]
-
-# Look at correlation of singscore with SLC levels
-cur <- cur[[1]]
-cur %<>% dplyr::select(rlib, ss.TotalScore, directional_Zsum) %>%
-  merge(., nbl, by = 'rlib')
-cor(cur$ss.TotalScore, cur$SLC3A2)
-cor(cur$ss.TotalScore, cur$SLC7A11)
-cor(cur$directional_Zsum, cur$SLC3A2)
-cor(cur$directional_Zsum, cur$SLC7A11)
-
 ```
 
 ### Correlation of elife score with 306 gene score
@@ -1564,173 +1184,6 @@ ggscatter(comb, x='ss.TotalScore', y='CD8_Tcells',
 
 ```
 
-### Elife gene signature LR/IR/HR
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$group
-
-# get PCA and boxplots
-cur <- make_plots(
-  DF = nbl,
-  UPGENES = elife_up, 
-  DOWNGENES = elife_down, 
-  COMP = 'comp', 
-  TIMEPOINT = 'dxprim', 
-  STAT_TEST = 'anova',
-  TITLE = 'elife gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-cur <- cur[[1]]
-
-# select HR and group into 2 subgroups seen
-cur %<>% dplyr::filter(comp == 'HR') %>%
-  mutate(subset = ifelse(ss.TotalScore >= -.1, 'sub_hi', 'sub_lo'))
-
-# table vars of interest - proportions
-prop.table(table(cur$subset, cur$timepoint), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
-prop.table(table(cur$subset, cur$dinuresp_old), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
-prop.table(table(cur$subset, cur$dinu_treat_prepost), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
-prop.table(table(cur$subset, cur$site), margin = 1) %>% `*`(100) %>% round(2) %>% barplot(beside=T, legend=rownames(.))
-
-# Raw values
-table(cur$dinu_treat_prepost, cur$subset) %>% barplot(beside=T, legend=rownames(.))
-
-
-```
-
-### Elife gene signature for Dinutuxumab response among HR (1/2/3/4)
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$dinuresp_old
-dat <- nbl %>% dplyr::filter(!comp %in% c('nothr', 'pending'))
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = elife_up, 
-  DOWNGENES = elife_down, 
-  COMP = 'comp', 
-  TIMEPOINT = 'dxprim', 
-  STAT_TEST = 'anova',
-  TITLE = 'ELIFE gene sig')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
-### Elife gene signature for Dinutuxumab response pre/post Dinituximab
-```{r}
-
-# Define comparison
-nbl$comp <- nbl$dinu_treat_prepost
-dat <- nbl %>% dplyr::mutate(comp = ifelse(!comp %in% c('postDIN', 'preDIN'), 'noDIN', comp))
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = elife_up, 
-  DOWNGENES = elife_down, 
-  COMP = 'comp', 
-  TIMEPOINT = 'all', 
-  STAT_TEST = 'anova',
-  TITLE = 'ELIFE gene sig')
-
-# plot and get df
-cur[2]
-cur[3]
-#cur[4]
-
-```
-
-### Kaplan meijer for OS
-```{r}
-
-# Filter dat for those with OS scores, keeping non-duplicate patients
-dat <- nbl %>% 
-  # remove those w/o times
-  dplyr::filter(!is.na(dinu_stime)) %>%
-  # for duplicate preferentially keep the dxprims (doesn't really matter since all have same survival time vals)
-  dplyr::mutate(timepoint = factor(timepoint, levels = c('dxprim', 'dx2prim', 'dxmet', 'posttx', 'rel_ref', 'pending'))) %>%
-  arrange(timepoint) %>%
-  dplyr::filter(!duplicated(patient))
-
-# get sigscores for stratifying in kaplan meijer curve
-cur <- make_plots(
-  DF = dat,
-  UPGENES = elife_up, 
-  DOWNGENES = elife_down, 
-  COMP = 'comp', 
-  TIMEPOINT = 'dxprim', 
-  STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
-cur <- cur[[1]]
-
-# stratify by quartile 
-cur %<>%
-  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
-  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
-  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
-cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, comp))
-
-# stratify by visual cutoff
-#cur %<>% mutate(comp = ifelse(ss.TotalScore > -0.12, 'hi', 'lo'))
-
-# plot Kaplan meijer
-km_fit <- survfit(Surv(dinu_stime, rep(1, length(dat$rlib))) ~ comp, data=cur)
-summary(km_fit, times = c(1,30,60,90*(1:10)))
-autoplot(km_fit)
-
-```
-
-### Kaplan meijer for EFS
-```{r}
-
-# Filter dat for those with OS scores, keeping non-duplicate patients
-dat <- nbl %>% 
-  # remove those w/o times
-  dplyr::filter(!is.na(dinu_efstime)) %>%
-  # for duplicate preferentially keep the dxprims (doesn't really matter since all have same survival time vals)
-  dplyr::mutate(timepoint = factor(timepoint, levels = c('dxprim', 'dx2prim', 'dxmet', 'posttx', 'rel_ref', 'pending'))) %>%
-  arrange(timepoint) %>%
-  dplyr::filter(!duplicated(patient))
-
-# get sigscores for stratifying in kaplan meijer curve
-cur <- make_plots(
-  DF = dat,
-  UPGENES = elife_up, 
-  DOWNGENES = elife_down, 
-  COMP = 'comp', 
-  TIMEPOINT = 'dxprim', 
-  STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
-cur <- cur[[1]]
-
-# stratify by quartile 
-cur %<>%
-  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
-  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
-  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
-cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
-
-# stratify by visual cutoff
-#cur %<>% mutate(comp = ifelse(ss.TotalScore > 0, 'hi', 'lo'))
-
-# plot Kaplan meijer
-km_fit <- survfit(Surv(dinu_efstime, rep(1, length(dat$rlib))) ~ comp, data=cur)
-summary(km_fit, times = c(1,30,60,90*(1:10)))
-autoplot(km_fit)
-
-```
-
-
 
 # Look at expression of cell markers
 
@@ -1751,7 +1204,7 @@ nk_up <- nk %>% dplyr::filter(logfc > 0) %>%
 
 # select variables needed for plot and format properly
 toPlot <- nbl %>% 
-  mutate(comp = ifelse(dinu_treat_prepost == '', 'none', dinu_treat_prepost)) %>%
+  mutate(comp = ifelse(dinutx_ever == 1, 'Yes', 'No')) %>%
   dplyr::select(comp, all_of(nk_up)) %>%
   gather(., gene, expression, CD160:XCL2) %>%
   mutate(log10exp = log10(expression+0.001))
