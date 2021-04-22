@@ -624,6 +624,53 @@ for(x in cont){
 
 ```
 
+
+### 306 gene signature Kaplan meijer for OS - breslow depth and ulceration
+```{r}
+
+# temp df to hold filtered skcmuniq data
+dat <- skcmuniq 
+
+# get sigscores for stratifying in kaplan meijer curve
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+cur <- cur[[1]]
+
+###############
+# Breslow depth
+################
+# quartile
+dat <- cur %>%
+  mutate(comp = ifelse(breslow_depth_value >= quantile(breslow_depth_value, na.rm = T)[3], 3, 2)) %>%
+  mutate(comp = ifelse(breslow_depth_value >= quantile(breslow_depth_value, na.rm = T)[4], 4, comp)) %>%
+  mutate(comp = ifelse(breslow_depth_value < quantile(breslow_depth_value, na.rm = T)[2], 1, comp)) 
+# plot Kaplan meijer
+km_fit <- survfit(Surv(OS.time, rep(1, length(dat[,1]))) ~ comp, data=dat)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit,
+         conf.int = F,
+         main = 'OS by breslow depth quartile')
+
+###############
+# Ulceration
+################
+# quartile
+dat <- cur %>% mutate(comp = melanoma_ulceration_indicator) %>%
+  dplyr::filter(comp %in% c('NO', 'YES'))
+# plot Kaplan meijer
+km_fit <- survfit(Surv(OS.time, rep(1, length(dat[,1]))) ~ comp, data=dat)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit,
+         conf.int = F,
+         main = 'OS by ulceration stauts')
+
+```
+
 ### 306 gene signature Kaplan meijer for OS - 1st vs 4th quartile
 ```{r}
 
@@ -640,21 +687,71 @@ cur <- make_plots(
   TITLE = '306 gene sig')
 cur <- cur[[1]]
 
+#################
+# 306gs all samples all quartile
+#################
 # stratify by quartile 
-cur %<>%
+dat <- cur %>%
   mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
   mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
   mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
-cur %<>% dplyr::filter(comp %in% c(1,4))
-#cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
-
-# stratify by visual cutoff
-#cur %<>% mutate(comp = ifelse(ss.TotalScore > -0.08, 'hi', 'lo'))
-
 # plot Kaplan meijer
-km_fit <- survfit(Surv(OS.time, rep(1, length(cur[,1]))) ~ comp, data=cur)
+km_fit <- survfit(Surv(OS.time, rep(1, length(dat[,1]))) ~ comp, data=dat)
 summary(km_fit, times = c(1,30,60,90*(1:10)))
-autoplot(km_fit)
+autoplot(km_fit,
+         conf.int = F,
+         main = 'OS by 306gs quartile')
+
+#################
+# 306gs all samples 1&4 quartile
+#################
+# stratify by quartile 
+dat <- cur %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+dat %<>% dplyr::filter(comp %in% c(1,4))
+# plot Kaplan meijer
+km_fit <- survfit(Surv(OS.time, rep(1, length(dat[,1]))) ~ comp, data=dat)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit,
+         conf.int = T,
+         main = 'OS by 306gs 1st/4th quartile')
+
+#################
+# 306gs highest breslow 1&4 quartile
+#################
+# stratify by quartile 
+dat <- cur %>%
+  dplyr::filter(breslow_depth_value >= quantile(breslow_depth_value, na.rm = T)[4]) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+dat %<>% dplyr::filter(comp %in% c(1,4))
+# plot Kaplan meijer
+km_fit <- survfit(Surv(OS.time, rep(1, length(dat[,1]))) ~ comp, data=dat)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit,
+         conf.int = F,
+         main = 'OS by 1st/4th quartile 306gs for 4th quartile breslow')
+
+#################
+# 306gs uclerated=y
+#################
+# stratify by quartile 
+dat <- cur %>%
+  dplyr::filter(melanoma_ulceration_indicator == 'YES') %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+dat %<>% dplyr::filter(comp %in% c(1,4))
+# plot Kaplan meijer
+km_fit <- survfit(Surv(OS.time, rep(1, length(dat[,1]))) ~ comp, data=dat)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit,
+         conf.int = F,
+         main = 'OS by 1st/4th quartile 306gs for Ulceration = Y')
+
 
 ```
 
@@ -682,13 +779,13 @@ cur[3]
 ```
 
 ### 306 gene signature for submitted tumor location
+Lymph protects metastasizing melanoma cells from ferroptosis
+https://www.nature.com/articles/s41586-020-2623-z 
 ```{r}
 
 # Define comparison
 skcm$comp <- skcm$submitted_tumor_location
-dat <- skcm %>% dplyr::filter(comp %in% c('Distant Metastasis', 'Primary Tumor ', 
-                                                         'Regional Cutaneous or Subcutaneous Tissue (includes satellite and in-transit metastasis)',
-                                                         'Regional Lymph Node'))
+dat <- skcm %>% dplyr::filter(comp %in% c('Primary Tumor', 'Regional Lymph Node'))
 
 # plot PCA and boxplots
 cur <- make_plots(
