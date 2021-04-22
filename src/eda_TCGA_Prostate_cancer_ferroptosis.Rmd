@@ -684,40 +684,6 @@ for(x in cont){
 
 ```
 
-### 306 gene signature Kaplan meijer for OS - 1st vs 4th quartile
-```{r}
-
-# temp df to hold filtered skcmuniq data
-dat <- praduniq 
-
-# get sigscores for stratifying in kaplan meijer curve
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig306_up, 
-  DOWNGENES = sig306_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'anova',
-  TITLE = '306 gene sig')
-cur <- cur[[1]]
-
-# stratify by quartile 
-cur %<>%
-  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
-  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
-  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
-cur %<>% dplyr::filter(comp %in% c(1,4))
-#cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
-
-# stratify by visual cutoff
-#cur %<>% mutate(comp = ifelse(ss.TotalScore > -0.08, 'hi', 'lo'))
-
-# plot Kaplan meijer
-km_fit <- survfit(Surv(OS.time, rep(1, length(cur[,1]))) ~ comp, data=cur)
-summary(km_fit, times = c(1,30,60,90*(1:10)))
-autoplot(km_fit)
-
-```
-
 ### 306 gene signature for psa_value
 ```{r}
 
@@ -779,6 +745,96 @@ cur[3]
 
 ```
 
+
+
+### 306 gene signature Kaplan meijer for OS - 1st vs 4th quartile
+```{r}
+
+# temp df to hold filtered skcmuniq data
+dat <- praduniq 
+
+# get sigscores for stratifying in kaplan meijer curve
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+cur <- cur[[1]]
+
+# stratify by quartile 
+cur %<>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+cur %<>% dplyr::filter(comp %in% c(1,4))
+
+# plot Kaplan meijer
+km_fit <- survfit(Surv(OS.time, rep(1, length(cur[,1]))) ~ comp, data=cur)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit,
+         conf.int = F,
+         main = '306gs quartiles (1st/4th)')
+
+```
+### 306 gene signature Kaplan meijer for OS - subset by gleason
+```{r}
+
+# temp df to hold filtered skcmuniq data
+dat <- praduniq 
+
+# get sigscores for stratifying in kaplan meijer curve
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '306 gene sig')
+cur <- cur[[1]]
+
+#########
+# stratify by gleason score 
+#########
+dat <- cur %>% mutate(comp = gleason_score)
+km_fit <- survfit(Surv(OS.time, rep(1, length(dat[,1]))) ~ comp, data=dat)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit,
+         conf.int = F,
+         main = 'gleason score')
+
+#########
+# stratify by gleason score (9)
+#########
+dat <- cur %>% 
+  dplyr::filter(gleason_score >= 9) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+#dat %<>% dplyr::filter(comp %in% c(1,4))
+km_fit <- survfit(Surv(OS.time, rep(1, length(dat[,1]))) ~ comp, data=dat)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit,
+         conf.int = F,
+         main = 'Ferroptosis quartiles in gleason >=9')
+
+#########
+# stratify by gleason score (8)
+#########
+dat <- cur %>% 
+  dplyr::filter(gleason_score >= 8) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+#dat %<>% dplyr::filter(comp %in% c(1,4))
+km_fit <- survfit(Surv(OS.time, rep(1, length(dat[,1]))) ~ comp, data=dat)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit,
+         conf.int = F,
+         main = 'Ferroptosis quartiles in gleason >= 8')
+
+```
 
 
 ## 63 gene signature
