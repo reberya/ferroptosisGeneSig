@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Description:
-
+Analyzed TCGA breast cancer cohort using 306 gene ferroptosis gene signature. Overall see differences in ferroptosis levels by subtype. Differences in OS most pronounced in HER2-overexpressing breast cancer. 
 
 
 # Load packages
@@ -69,7 +69,7 @@ otherMeta <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/data/
 
 # Get biomart information
 ensembl <- useMart("ensembl")
-ensembl = useDataset("hsapiens_gene_ensembl",mart=ensembl)
+ensembl = useDataset("hsapiens_gene_ensembl", mart=ensembl)
 
 
 key = getBM(attributes=c('ensembl_gene_id', 'external_gene_name'), 
@@ -228,7 +228,7 @@ https://bioconductor.org/packages/devel/bioc/vignettes/singscore/inst/doc/singsc
 # DOWNGENES - list of genes downregulated in gene signature
 # METACOLS - the columns of metadata within DF (needs to be one greater than number of metacols currently; d/t Row.names being added during merge)
 
-calculate_signature_scores <- function(DF, UPGENES, DOWNGENES, METACOLS = 1:346){
+calculate_signature_scores <- function(DF, UPGENES, DOWNGENES, METACOLS = 1:292){
   
   # create temp dataframe
   cnts <- DF %>% set_rownames(paste0('Sample_', 1:length(DF[,1])))
@@ -414,6 +414,7 @@ sig306_dn <- sig306 %>%
 
 ### Distribution of 306 gene signature scores in all patients. Correlation with SLC levels
 Also check correlation with MIR522 -secreted by fibroblasts and inhibits ferroptosis (https://molecular-cancer.biomedcentral.com/articles/10.1186/s12943-020-01168-8#:~:text=Ferroptosis%20is%20a%20novel%20mode,various%20bioactive%20substances%2C%20including%20exosomes)
+Check correlation of other genes associated with ferroptosis too
 ```{r}
 
 # Define comparison
@@ -430,36 +431,20 @@ cur <- make_plots(
 
 # Plot distribution of sing score
 cur[3]
-cur[4]
+#cur[4]
 
 # Look at correlation of singscore with SLC levels
 cur <- cur[[1]]
 cur %<>% dplyr::select(submitter_id.samples, ss.TotalScore, directional_Zsum) %>%
   merge(., brcauniq, by = 'submitter_id.samples')
-
-# singScore with SLC3A2 expression
+## SLC3A2 expression
 ggscatter(cur, x='ss.TotalScore', y='SLC3A2',
           add='reg.line',
           add.params = list(color='blue', fill='lightgray'),
           conf.int = T) +
   stat_cor(method = "pearson")
-
-# singScore with SLC7A11
+## SLC7A11
 ggscatter(cur, x='ss.TotalScore', y='SLC7A11',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# Directional Z sum with SLC3A2
-ggscatter(cur, x='directional_Zsum', y='SLC3A2',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# Directional Z sum with SLC7A11
-ggscatter(cur, x='directional_Zsum', y='SLC7A11',
           add='reg.line',
           add.params = list(color='blue', fill='lightgray'),
           conf.int = T) +
@@ -472,35 +457,34 @@ ggscatter(cur, x='SLC3A2', y='SLC7A11',
           conf.int = T) +
   stat_cor(method = "pearson")
 
-# singScore with ALOX15 expression
+# Other genes of interest with gs expression
+## ALOX15 expression
 ggscatter(cur, x='ss.TotalScore', y='ALOX15',
           add='reg.line',
           add.params = list(color='blue', fill='lightgray'),
           conf.int = T) +
   stat_cor(method = "pearson")
-
-# singScore with ALOX15B expression
+## ALOX15B expression
 ggscatter(cur, x='ss.TotalScore', y='ALOX15B',
           add='reg.line',
           add.params = list(color='blue', fill='lightgray'),
           conf.int = T) +
   stat_cor(method = "pearson")
-
-# singScore with PLIN2 expression
+## PLIN2 expression
 ggscatter(cur, x='ss.TotalScore', y='PLIN2',
           add='reg.line',
           add.params = list(color='blue', fill='lightgray'),
           conf.int = T) +
   stat_cor(method = "pearson")
-
-# singScore with GDF15 expression
+## GDF15 expression
 ggscatter(cur, x='ss.TotalScore', y='GDF15',
           add='reg.line',
           add.params = list(color='blue', fill='lightgray'),
           conf.int = T) +
   stat_cor(method = "pearson")
 
-# CAFs with Alox15
+# Immune cell level with gene level
+## CAFs with Alox15
 ggscatter(cur, x='CAFs', y='ALOX15B',
           add='reg.line',
           add.params = list(color='blue', fill='lightgray'),
@@ -633,12 +617,13 @@ table(cur$elife_sub, cur$sig306_sub)
 
 ```
 
-## 306gs with Breast cancer mutational status
+### 306gs with Breast cancer mutational status
 ```{r}
 
 # Define comparison
 dat <- brcauniq %>% dplyr::mutate(comp = PAM50_mRNA_nature2012)
-dat %<>% dplyr::filter(comp %in% c('Basal-like', 'HER2-enriched', 'Luminal A', 'Luminal B', 'Normal-like'))
+dat %<>% dplyr::filter(comp %in% c('Basal-like', 'HER2-enriched', 'Luminal A', 'Luminal B', 'Normal-like')) %>%
+  mutate(comp = factor(comp, levels = c('Normal-like', 'Luminal A', 'Luminal B', 'HER2-enriched', 'Basal-like')))
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -655,12 +640,12 @@ cur[3]
 #cur[4]
 ```
 
-## 306gs with Breast cancer Her2 status
+### 306gs with Breast cancer Her2 status
 ```{r}
 
 # Define comparison
 dat <- brcauniq %>% dplyr::mutate(comp = HER2_Final_Status_nature2012)
-dat %<>% dplyr::filter(comp %in% c('Equivocal', 'Negative', 'Positive'))
+dat %<>% dplyr::filter(comp %in% c('Negative', 'Positive'))
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -668,7 +653,7 @@ cur <- make_plots(
   UPGENES = sig306_up, 
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
-  STAT_TEST = 'anova',
+  STAT_TEST = 'wilcox.test',
   TITLE = '306gs: Breast cancer Her2 classification')
 
 # plot and get df
@@ -677,7 +662,7 @@ cur[3]
 #cur[4]
 ```
 
-## 306gs with Breast cancer PR status
+### 306gs with Breast cancer PR status
 ```{r}
 
 # Define comparison
@@ -690,7 +675,7 @@ cur <- make_plots(
   UPGENES = sig306_up, 
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
-  STAT_TEST = 'Wilcox.test',
+  STAT_TEST = 'wilcox.test',
   TITLE = '306gs: Breast cancer PR classification')
 
 # plot and get df
@@ -699,7 +684,7 @@ cur[3]
 #cur[4]
 ```
 
-## 306gs with Breast cancer ER status
+### 306gs with Breast cancer ER status
 ```{r}
 
 # Define comparison
@@ -721,14 +706,12 @@ cur[3]
 #cur[4]
 ```
 
-## 306gs with Breast cancer ER status
+### 306 gene signature for tissue type
 ```{r}
 
 # Define comparison
-dat <- brcauniq %>% 
-  dplyr::filter(ER_Status_nature2012 %in% c('Negative', 'Positive')) %>%
-  mutate(comp = ifelse(ER_Status_nature2012 == 'Positive', 'Luminal', 'TNBC' )) %>%
-  mutate(comp = ifelse(ER_Status_nature2012 == 'Negative' & HER2_Final_Status_nature2012 == 'Positive', 'Her2', comp))
+brca$comp <- brca$sample_type.samples
+dat <- brca %>% dplyr::filter(sample_type.samples %in% c('Metastatic', 'Primary Tumor', 'Solid Tissue Normal'))
 
 # plot PCA and boxplots
 cur <- make_plots(
@@ -737,31 +720,6 @@ cur <- make_plots(
   DOWNGENES = sig306_dn, 
   COMP = 'comp', 
   STAT_TEST = 'anova',
-  TITLE = '306gs: Breast cancer classification')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-```
-
-
-
-
-### 306 gene signature for tissue type
-```{r}
-
-# Define comparison
-brca$comp <- brca$sample_type.samples
-dat <- brca %>% dplyr::filter(sample_type.samples %in% c('Primary Tumor', 'Solid Tissue Normal'))
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig306_up, 
-  DOWNGENES = sig306_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'wilcox.test',
   TITLE = '306gs: Tissue type')
 
 # plot and get df
@@ -771,10 +729,9 @@ cur[3]
 
 ```
 
-
 ### Examine variables by table fxn to help narrow down which are interesting
-discrete: 
-continuous: psa_value gleason_score
+discrete: Metastasis_nature2012 radiation_therapy.x menopause_status.x
+continuous: 
 ```{r}
 
 # get sigscores 
@@ -795,7 +752,7 @@ cur %<>%
 
 
 # Discrete variables 
-disc <- c('primary_therapy_outcome_success', 'new_tumor_event_after_initial_treatment', 'radiation_therapy')
+disc <- c('Tumor_nature2012', 'Metastasis_nature2012', 'radiation_therapy.x', 'menopause_status.x')
 
 # loop through discrete variables
 for(x in disc){
@@ -805,7 +762,7 @@ for(x in disc){
 
 
 # Continuous variables
-cont <- c('age_at_initial_pathologic_diagnosis', 'gleason_score','psa_value')
+cont <- c(NULL)
 
 # loop through continuous variables
 for(x in cont){
@@ -826,7 +783,106 @@ for(x in cont){
 
 ```
 
+### 306 gene signature for pathologic_stage
+```{r}
+
+# Define comparison
+dat <- brcauniq %>% 
+  mutate(comp = ifelse(pathologic_stage %in% c('Stage I', 'Stage IA', 'Stage IB'), 'Stage 1', pathologic_stage)) %>% 
+  mutate(comp = ifelse(pathologic_stage %in% c('Stage II', 'Stage IIA', 'Stage IIB', 'Stage IIC'), 'Stage 2', comp)) %>%
+  mutate(comp = ifelse(pathologic_stage %in% c('Stage III', 'Stage IIIA', 'Stage IIIB', 'Stage IIIC'), 'Stage 3', comp)) %>%
+  mutate(comp = ifelse(pathologic_stage %in% c('Stage IV', 'Stage IVA', 'Stage IVb'), 'Stage 4', comp)) %>%
+  dplyr::filter(!comp %in% c('[Discrepancy]', '', 'Stage X'))
+                                
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'anova',
+  TITLE = '306gs: tumor stage')
+
+# plot
+cur[3]
+
+
+```
+
+
+### 306 gene signature for Metastasis_nature2012
+```{r}
+
+# Define comparison
+brca$comp <- brca$Metastasis_nature2012
+dat <- brca %>% dplyr::filter(comp %in% c('M0', 'M1'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '306gs: Metastasis_nature2012')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 306 gene signature for radiation_therapy.x
+```{r}
+
+# Define comparison
+brca$comp <- brca$radiation_therapy.x
+dat <- brca %>% dplyr::filter(comp %in% c('NO', 'YES'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '306gs: radiation_therapy.x')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
+### 306 gene signature for menopause_status.x
+```{r}
+
+# Define comparison
+brca$comp <- brca$menopause_status.x
+dat <- brca %>% dplyr::filter(comp %in% c('Post (prior bilateral ovariectomy OR >12 mo since LMP with no prior hysterectomy)', 'Pre (<6 months since LMP AND no prior bilateral ovariectomy AND not on estrogen replacement)'))
+dat %<>% mutate(comp = ifelse(comp == 'Pre (<6 months since LMP AND no prior bilateral ovariectomy AND not on estrogen replacement)', 'pre', 'post'))
+
+# plot PCA and boxplots
+cur <- make_plots(
+  DF = dat,
+  UPGENES = sig306_up, 
+  DOWNGENES = sig306_dn, 
+  COMP = 'comp', 
+  STAT_TEST = 'wilcox.test',
+  TITLE = '306gs: menopause_status.x')
+
+# plot and get df
+
+cur[3]
+#cur[4]
+
+```
+
 ### 306 gene signature Kaplan meijer for OS - 1st vs 4th quartile
+Her2+ worse than luminal B worse than Luminal A == Basal
 ```{r}
 
 # temp df to hold filtered skcmuniq data
@@ -842,438 +898,103 @@ cur <- make_plots(
   TITLE = '306 gene sig')
 cur <- cur[[1]]
 
-# stratify by quartile 
-cur %<>%
+# plot Kaplan meijer by subtype
+temp <- cur %>% dplyr::filter(!PAM50_mRNA_nature2012 %in% c('Normal-like', ''))
+temp %<>%
   mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
   mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
   mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
-cur %<>% dplyr::filter(comp %in% c(1,4))
-#cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
-
-# stratify by visual cutoff
-#cur %<>% mutate(comp = ifelse(ss.TotalScore > -0.08, 'hi', 'lo'))
-
-# plot Kaplan meijer
-km_fit <- survfit(Surv(OS.time, rep(1, length(cur[,1]))) ~ comp, data=cur)
+temp %<>% dplyr::filter(comp %in% c(1,4))
+km_fit <- survfit(Surv(OS.time, rep(1, length(temp[,1]))) ~ PAM50_mRNA_nature2012, data=temp)
 summary(km_fit, times = c(1,30,60,90*(1:10)))
-autoplot(km_fit)
-
-```
-
-### 306 gene signature for psa_value
-```{r}
-
-# Define comparison
-dat <- brcauniq %>% 
-  mutate(comp = ifelse(psa_value >= quantile(psa_value, na.rm = T)[3], 'quant_3', 'quant_2')) %>%
-  mutate(comp = ifelse(psa_value >= quantile(psa_value, na.rm = T)[4], 'quant_4', comp)) %>%
-  mutate(comp = ifelse(psa_value < quantile(psa_value, na.rm = T)[2], 'quant_1', comp))
-
-# clean
-## remove na vars
-dat %<>% filter(!is.na(comp)) %>%
-  ##remove outliers
-  mutate(psa_value = log10(psa_value +0.1))
-  
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig306_up, 
-  DOWNGENES = sig306_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'anova',
-  TITLE = '306gs: PSA value')
-
-# plot and get df
-cur[3]
-#cur[4]
-
-# correlation
-ggscatter(cur[[1]], x='ss.TotalScore', y='psa_value',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson") +
-  ylab('log10(psa + 0.1)')
-
-```
-
-### 306 gene signature for gleason_score
-```{r}
-
-# Define comparison
-brcauniq$comp <- as.factor(brcauniq$gleason_score)
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = brcauniq,
-  UPGENES = sig306_up, 
-  DOWNGENES = sig306_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'anova',
-  TITLE = '306gs: Gleason score')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
-
-
-## 63 gene signature
-
-### Load gene signature
-```{r}
-sig63 <- fread('/mctp/share/users/rebernrj/projects/ferroptosisGeneSig/out/gene_signatures/erastin_clue24h_gse104462_63genes.txt',
-                data.table = F)
-
-# Upregulated
-sig63_up <- sig63 %>% 
-  dplyr::filter(upregulated == T) %>% 
-  dplyr::select(V1) %>% unlist()
-
-# Downregulated
-sig63_dn <- sig63 %>% 
-  dplyr::filter(upregulated == F) %>% 
-  dplyr::select(V1) %>% unlist()
-
-
-```
-
-### Distribution of 63 gene signature scores in all patients. Correlation with SLC levels
-```{r}
-
-# Define comparison
-brcauniq$comp <- 'all'
-
-# get PCA and boxplots
-cur <- make_plots(
-  DF = brcauniq,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
-
-# Plot distribution of sing score
-cur[3]
-cur[4]
-
-# Look at correlation of singscore with SLC levels
-cur <- cur[[1]]
-cur %<>% dplyr::select(submitter_id.samples, ss.TotalScore, directional_Zsum) %>%
-  merge(., brcauniq, by = 'submitter_id.samples')
-
-# singScore with SLC3A2 expression
-ggscatter(cur, x='ss.TotalScore', y='SLC3A2',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# singScore with SLC7A11
-ggscatter(cur, x='ss.TotalScore', y='SLC7A11',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# Directional Z sum with SLC3A2
-ggscatter(cur, x='directional_Zsum', y='SLC3A2',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# Directional Z sum with SLC7A11
-ggscatter(cur, x='directional_Zsum', y='SLC7A11',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# SLC7A11 vs SLC3A2
-ggscatter(cur, x='SLC3A2', y='SLC7A11',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-```
-
-### Correlation with cell proportions
-```{r}
-
-# Load gene sig scores
-cur <- make_plots(
-  DF = brca,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
-cur <- cur[[1]]
-
-
-# CD4
-ggscatter(cur, x='ss.TotalScore', y='CD4_Tcells',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# CD8
-ggscatter(cur, x='ss.TotalScore', y='CD8_Tcells',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# B cells
-ggscatter(cur, x='ss.TotalScore', y='Bcells',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# CAFs
-ggscatter(cur, x='ss.TotalScore', y='CAFs',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# Endothelial
-ggscatter(cur, x='ss.TotalScore', y='Endothelial',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# Macrophages
-ggscatter(cur, x='ss.TotalScore', y='Macrophages',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# NKcells
-ggscatter(cur, x='ss.TotalScore', y='NKcells',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-# otherCells
-ggscatter(cur, x='ss.TotalScore', y='otherCells',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-
-
-```
-
-### Correlation of 63gs with elife score
-```{r}
-
-# Load signature
-elife_up <- c('CHAC1', 'DDIT4', 'LOC284561', 'ASNS', 'TSC22D3', 'DDIT3', 'JDP2', 'SESN2',
-              'SLC1A4', 'PCK2', 'SLC7A11', 'TXNIP', 'VLDLR', 'GPT2', 'PSAT1', 'C9ORF150',
-              'SLC7A5', 'HERPUD1', 'XBP1', 'ATF3', 'SLC3A2', 'CBS', 'ATF4', 'ZNF419', 
-              'KLHL24', 'TRIB3', 'ZNF643', 'ATP6V1G2', 'VEGFA', 'GDF15', 'TUBE1', 
-              'ARRDC3', 'CEBPG')
-elife_down <- c('SNORA16A', 'RGS4', 'MUTED-TXNDC5', 'LOC390705')
-
-
-# Determine correlation
-## get elife values
-brca$comp <- 'all'
-cur <- make_plots(
-  DF = brca,
-  UPGENES = elife_up, 
-  DOWNGENES = elife_down, 
-  COMP = 'comp', 
-  STAT_TEST = 'anova',
-  TITLE = 'elife gene sig')
-cur <- cur[[1]]
-cur %<>% dplyr::select(submitter_id.samples, ss.TotalScore, directional_Zsum) %>% set_colnames(c('submitter_id.samples', 'elife.ss', 'elife.zsum'))
-## get sig63 values
-temp <- make_plots(
-  DF = brca,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'anova',
-  TITLE = 'elife gene sig')
-temp <- temp[[1]]
-temp %<>% dplyr::select(submitter_id.samples, ss.TotalScore, directional_Zsum) %>% set_colnames(c('submitter_id.samples', 'sig63.ss', 'sig63.zsum'))
-##merge
-cur %<>% merge(., temp, by = 'submitter_id.samples')
-## Plot singscore elife vs singscore 63
-ggscatter(cur, x='elife.ss', y='sig63.ss',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson")
-## Determine if the high scoring samples are the same in both scores
-cur %<>% 
-  mutate(elife_sub = ifelse(elife.ss >= quantile(elife.ss)[4], 'elife_hi', 'elife_lo')) %>%
-  mutate(sig63_sub = ifelse(sig63.ss >= quantile(sig63.ss)[4], 'sig63_hi', 'sig63_lo'))
-table(cur$elife_sub, cur$sig63_sub)
-
-
-```
-
-### Examine variables by table fxn to help narrow down which are interesting
-discrete: 
-continuous: psa_value gleason_score
-```{r}
-
-# get sigscores 
-cur <- make_plots(
-  DF = brcauniq,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
-cur <- cur[[1]]
-
-# stratify by sigscores quartile 
-cur %<>%
-  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 'gs_quant_3', 'gs_quant_2')) %>%
-  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 'gs_quant_4', comp)) %>%
-  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 'gs_quant_1', comp)) 
-
-
-# Discrete variables 
-disc <- c('primary_therapy_outcome_success', 'new_tumor_event_after_initial_treatment', 'radiation_therapy')
-
-# loop through discrete variables
-for(x in disc){
-  print(x)
-  print(table(cur$comp, cur[,x]))
-}
-
-
-# Continuous variables
-cont <- c('age_at_initial_pathologic_diagnosis', 'gleason_score','psa_value')
-
-# loop through continuous variables
-for(x in cont){
-  
-  print(x)
-
-  # create quartiles of current continuous variable
-  cur$var <- 'quart3'
-  cur$var <- ifelse(cur[,x] >= quantile(cur[,x], na.rm = T)[4], 'quart4', cur$var)
-  cur$var <- ifelse(cur[,x] <= quantile(cur[,x], na.rm = T)[3], 'quart2', cur$var)
-  cur$var <- ifelse(cur[,x] <= quantile(cur[,x], na.rm = T)[2], 'quart1', cur$var)
-
-  # table
-  print(table(cur$comp, cur$var))
-  
-}
-
-
-```
-
-### 63 gene signature Kaplan meijer for OS - 1st vs 4th quartile
-```{r}
-
-# temp df to hold filtered skcmuniq data
-dat <- brcauniq 
-
-# get sigscores for stratifying in kaplan meijer curve
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'anova',
-  TITLE = '63 gene sig')
-cur <- cur[[1]]
-
-# stratify by quartile 
-cur %<>%
+autoplot(km_fit,
+         main = 'All subtypes stratified by subtype',
+         conf.int = F)
+
+# plot Kaplan meijer for all subtypes by 306gs median
+temp <- cur 
+temp %<>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], '3/4', '1/2'))
+km_fit <- survfit(Surv(OS.time, rep(1, length(temp[,1]))) ~ comp, data=temp)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit,
+         main = 'All subtypes stratified by 306gs score mean',
+         conf.int = F)
+
+# plot Kaplan meijer for all subtypes by 306gs visual cutoff
+temp <- cur 
+temp %<>%
+  mutate(comp = ifelse(ss.TotalScore >= -0.08, 'High-ferrop', 'Low-ferrop'))
+km_fit <- survfit(Surv(OS.time, rep(1, length(temp[,1]))) ~ comp, data=temp)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit,
+         main = 'All subtypes stratified by 306gs visual cutoff (-0.08)',
+         conf.int = F)
+
+# plot Kaplan meijer for all subtypes by 306gs
+temp <- cur 
+temp %<>%
   mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
   mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
   mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
-cur %<>% dplyr::filter(comp %in% c(1,4))
-#cur %<>% mutate(comp = ifelse(comp %in% c(1,2,3), 123, 4))
-
-# stratify by visual cutoff
-#cur %<>% mutate(comp = ifelse(ss.TotalScore > -0.08, 'hi', 'lo'))
-
-# plot Kaplan meijer
-km_fit <- survfit(Surv(OS.time, rep(1, length(cur[,1]))) ~ comp, data=cur)
+#temp %<>% dplyr::filter(comp %in% c(1,4))
+km_fit <- survfit(Surv(OS.time, rep(1, length(temp[,1]))) ~ comp, data=temp)
 summary(km_fit, times = c(1,30,60,90*(1:10)))
-autoplot(km_fit)
+autoplot(km_fit,
+         main = 'All subtypes stratified by 1st/4th 306gs score quartile',
+         conf.int = F)
 
+
+# plot Kaplan meijer for basal
+temp <- cur %>% dplyr::filter(PAM50_mRNA_nature2012 %in% c('Basal-like'))
+temp %<>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+#temp %<>% dplyr::filter(comp %in% c(1,4))
+km_fit <- survfit(Surv(OS.time, rep(1, length(temp[,1]))) ~ comp, data=temp)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(km_fit,
+         main = 'Basal-like stratified by 306gs score quartile',
+         conf.int = F)
+
+# plot Kaplan meijer for HER2-enriched
+temp <- cur %>% dplyr::filter(PAM50_mRNA_nature2012 %in% c('HER2-enriched'))
+temp %<>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+#temp %<>% dplyr::filter(comp %in% c(1,4))
+km_fit <- survfit(Surv(OS.time, rep(1, length(temp[,1]))) ~ comp, data=temp)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(object = km_fit, 
+         main = 'HER2-enriched stratified by 306gs score quartile',
+         conf.int = F)
+
+# plot Kaplan meijer for Luminal A
+temp <- cur %>% dplyr::filter(PAM50_mRNA_nature2012 %in% c('Luminal A'))
+temp %<>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+#temp %<>% dplyr::filter(comp %in% c(1,4))
+km_fit <- survfit(Surv(OS.time, rep(1, length(temp[,1]))) ~ comp, data=temp)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(object = km_fit, 
+         main = 'Luminal A stratified by 306gs score quartile',
+         conf.int = F)
+
+# plot Kaplan meijer for Luminal B
+temp <- cur %>% dplyr::filter(PAM50_mRNA_nature2012 %in% c('Luminal B'))
+temp %<>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[3], 3, 2)) %>%
+  mutate(comp = ifelse(ss.TotalScore >= quantile(ss.TotalScore)[4], 4, comp)) %>%
+  mutate(comp = ifelse(ss.TotalScore < quantile(ss.TotalScore)[2], 1, comp)) 
+#temp %<>% dplyr::filter(comp %in% c(1,4))
+km_fit <- survfit(Surv(OS.time, rep(1, length(temp[,1]))) ~ comp, data=temp)
+summary(km_fit, times = c(1,30,60,90*(1:10)))
+autoplot(object = km_fit, 
+         main = 'Luminal B stratified by 306gs score quartile',
+          conf.int = F)
+    
 ```
-
-### 63 gene signature for psa_value
-```{r}
-
-# Define comparison
-dat <- brcauniq %>% 
-  mutate(comp = ifelse(psa_value >= quantile(psa_value, na.rm = T)[3], 'quant_3', 'quant_2')) %>%
-  mutate(comp = ifelse(psa_value >= quantile(psa_value, na.rm = T)[4], 'quant_4', comp)) %>%
-  mutate(comp = ifelse(psa_value < quantile(psa_value, na.rm = T)[2], 'quant_1', comp))
-
-# clean
-## remove na vars
-dat %<>% filter(!is.na(comp)) %>%
-  ##remove outliers
-  mutate(psa_value = log10(psa_value +0.1))
-  
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = dat,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'anova',
-  TITLE = '63gs: PSA value')
-
-# plot and get df
-cur[3]
-#cur[4]
-
-# correlation
-ggscatter(cur[[1]], x='ss.TotalScore', y='psa_value',
-          add='reg.line',
-          add.params = list(color='blue', fill='lightgray'),
-          conf.int = T) +
-  stat_cor(method = "pearson") +
-  ylab('log10(psa + 0.1)')
-
-```
-
-### 63 gene signature for gleason_score
-```{r}
-
-# Define comparison
-brcauniq$comp <- as.factor(brcauniq$gleason_score)
-
-# plot PCA and boxplots
-cur <- make_plots(
-  DF = brcauniq,
-  UPGENES = sig63_up, 
-  DOWNGENES = sig63_dn, 
-  COMP = 'comp', 
-  STAT_TEST = 'anova',
-  TITLE = '63gs: gleason score')
-
-# plot and get df
-
-cur[3]
-#cur[4]
-
-```
-
